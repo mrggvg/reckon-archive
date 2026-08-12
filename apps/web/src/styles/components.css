@@ -607,6 +607,12 @@
   margin-top: 1px;
 }
 
+/* Teal for settled money, matching the paid badge on invoices. */
+.dur-status.paid {
+  color: var(--secondary);
+  font-weight: 600;
+}
+
 .punch .times {
   font-family: var(--mono);
   font-size: 14px;
@@ -1147,12 +1153,25 @@
   font-weight: 500;
   z-index: 200;
   max-width: 320px;
-  transition: transform 0.25s;
+  /* Sliding out of the way isn't enough — 80px down from here is still inside
+     the tab bar — so the resting state is fully transparent and inert. */
+  opacity: 0;
+  visibility: hidden;
   pointer-events: none;
+  transition:
+    transform 0.25s,
+    opacity 0.25s,
+    visibility 0s linear 0.25s;
 }
 
 .toast.show {
   transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  visibility: visible;
+  transition:
+    transform 0.25s,
+    opacity 0.25s,
+    visibility 0s;
 }
 
 @media (min-width: 900px) {

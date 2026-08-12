@@ -1,5 +1,5 @@
 import { todayIso } from './format';
-import type { Invoice, InvoiceStatus } from './types';
+import type { Invoice, InvoiceStatus, Session } from './types';
 
 export function invoiceStatusComputed(inv: Invoice): InvoiceStatus {
   if (inv.status === 'paid') return 'paid';
@@ -35,6 +35,21 @@ export function nextInvoiceNumber(
 export function invoiceSortKey(inv: Invoice): number {
   const [seq, year] = inv.number.split('/');
   return (parseInt(year ?? '0', 10) || 0) * 1000 + (parseInt(seq ?? '0', 10) || 0);
+}
+
+/**
+ * What a tracked entry should say about its billing: nothing while unbilled,
+ * "invoiced" once it's on an invoice, and "paid" once that invoice is settled.
+ */
+export function sessionBillingLabel(
+  session: Session,
+  invoices: Invoice[],
+): 'invoiced' | 'paid' | null {
+  if (!session.invoiced) return null;
+  const invoice = session.invoiceId
+    ? invoices.find((i) => i.id === session.invoiceId)
+    : undefined;
+  return invoice?.status === 'paid' ? 'paid' : 'invoiced';
 }
 
 export const STATUS_BADGE: Record<InvoiceStatus, string> = {

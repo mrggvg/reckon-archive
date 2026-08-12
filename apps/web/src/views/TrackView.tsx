@@ -8,6 +8,7 @@ import {
   todayIso,
 } from '../lib/format';
 import type { OpenSheet } from '../lib/sheets';
+import { sessionBillingLabel } from '../lib/invoice';
 import { uid } from '../lib/storage';
 import type { Session } from '../lib/types';
 import { useStore } from '../store/context';
@@ -211,7 +212,9 @@ export function PunchRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { data } = useStore();
   const dur = hoursBetween(session.start, session.end);
+  const billing = sessionBillingLabel(session, data.invoices);
   return (
     <div
       className={'punch' + (session.invoiced ? ' billed' : '')}
@@ -222,7 +225,12 @@ export function PunchRow({
         {session.note ? <div className="note">{session.note}</div> : null}
         <div className="dur">
           {fmtHours(dur)}
-          {session.invoiced ? ' · invoiced' : ''}
+          {billing ? (
+            <>
+              {' · '}
+              <span className={'dur-status ' + billing}>{billing}</span>
+            </>
+          ) : null}
         </div>
       </div>
       <div className="times">
