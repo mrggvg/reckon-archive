@@ -1208,3 +1208,124 @@
   border-top: 1px solid var(--border);
   border-bottom: none;
 }
+
+/* ---------- Auth ---------- */
+.auth-shell {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.auth-splash {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-fg);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  box-shadow: var(--shadow);
+}
+
+.auth-brand {
+  margin-bottom: 24px;
+}
+
+.auth-brand .mark {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.auth-brand .sub {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-fg);
+  margin-top: 4px;
+}
+
+.auth-card .banner {
+  padding: 10px 12px;
+  font-size: 12.5px;
+}
+
+.auth-foot {
+  margin-top: 16px;
+  margin-bottom: 0;
+  font-size: 12px;
+  color: var(--muted-fg);
+  text-align: center;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.field-error {
+  font-size: 12px;
+  color: var(--error-fg);
+  margin-top: 5px;
+}
+
+.input.invalid {
+  border-color: var(--destructive);
+}
+
+/* ---------- Account / sign out ---------- */
+.nav-item-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-item.signout:hover {
+  background: var(--error-bg);
+  color: var(--error-fg);
+}
+
+.sidebar-account {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted-fg);
+  padding: 8px 10px 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted-fg);
+}

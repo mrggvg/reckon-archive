@@ -58,3 +58,12 @@ export function UserIcon() {
     </svg>
   );
 }
+
+export function SignOutIcon() {
+  return (
+    <svg {...common}>
+      <path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4" />
+      <path d="M10 8l-4 4 4 4M6 12h9" />
+    </svg>
+  );
+}

@@ -4,9 +4,11 @@ import {
   ClientsIcon,
   ClockIcon,
   InvoiceIcon,
+  SignOutIcon,
   TaxIcon,
   UserIcon,
 } from './components/icons';
+import { useAuth } from './auth/context';
 import { ClientSheet } from './sheets/ClientSheet';
 import { DayDetailSheet } from './sheets/DayDetailSheet';
 import { EditInvoiceSheet } from './sheets/EditInvoiceSheet';
@@ -35,6 +37,7 @@ const TABS: { name: TabName; label: string; icon: () => React.ReactElement }[] =
 
 export default function App() {
   const { data } = useStore();
+  const { user, signOut } = useAuth();
   const [tab, setTab] = useState<TabName>('track');
   const [stack, setStack] = useState<SheetState[]>([]);
 
@@ -99,8 +102,15 @@ export default function App() {
         <div className="sidebar-foot">
           <button className="nav-item" onClick={() => openSheet({ kind: 'profile' })}>
             <UserIcon />
-            {profileTag}
+            <span className="nav-item-text">{profileTag}</span>
           </button>
+          <button className="nav-item signout" onClick={() => void signOut()}>
+            <SignOutIcon />
+            Sign out
+          </button>
+          <div className="sidebar-account" title={user?.email}>
+            {user?.email}
+          </div>
         </div>
       </aside>
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAuth } from '../auth/context';
 import { Field, Sheet } from '../components/ui';
 import { DEFAULT_VAT_CLAUSE } from '../lib/storage';
 import type { Profile } from '../lib/types';
@@ -6,6 +7,7 @@ import { useStore } from '../store/context';
 
 export function ProfileSheet({ onClose }: { onClose: () => void }) {
   const { data, update, toast } = useStore();
+  const { user, signOut } = useAuth();
   const p = data.profile;
 
   const [form, setForm] = useState<Profile>({
@@ -215,6 +217,13 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
       <button className="btn btn-primary btn-block" onClick={save}>
         Save
       </button>
+
+      <div className="sheet-account">
+        <span className="mono">{user?.email}</span>
+        <button className="btn btn-outline btn-sm" onClick={() => void signOut()}>
+          Sign out
+        </button>
+      </div>
     </Sheet>
   );
 }

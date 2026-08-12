@@ -4,8 +4,14 @@ import { loadData, saveData } from '../lib/storage';
 import type { AppData } from '../lib/types';
 import { StoreContext } from './context';
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<AppData>(() => loadData());
+export function StoreProvider({
+  userId,
+  children,
+}: {
+  userId: string;
+  children: ReactNode;
+}) {
+  const [data, setData] = useState<AppData>(() => loadData(userId));
   const [toastMsg, setToastMsg] = useState('');
   const [toastShown, setToastShown] = useState(false);
   const toastTimer = useRef<number | undefined>(undefined);
@@ -22,9 +28,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const persist = useCallback(
     (next: AppData) => {
       setData(next);
-      if (!saveData(next)) toast('Could not save — storage is full or blocked');
+      if (!saveData(userId, next)) toast('Could not save — storage is full or blocked');
     },
-    [toast],
+    [toast, userId],
   );
 
   const update = useCallback(
@@ -32,11 +38,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setData((current) => {
         const draft = structuredClone(current);
         mutate(draft);
-        if (!saveData(draft)) toast('Could not save — storage is full or blocked');
+        if (!saveData(userId, draft)) toast('Could not save — storage is full or blocked');
         return draft;
       });
     },
-    [toast],
+    [toast, userId],
   );
 
   const value = useMemo(
