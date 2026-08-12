@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ApiError } from '../lib/api';
 import { useAuth } from './context';
+import { btn, btnBlock, field, hint, input, label, tabSeg } from '../styles/cx';
 
 type Mode = 'signin' | 'register';
 
@@ -39,24 +40,26 @@ export function AuthScreen() {
   };
 
   return (
-    <div className="auth-shell">
-      <div className="auth-card">
-        <div className="auth-brand">
-          <span className="mark">Reckon</span>
-          <span className="sub">freelance ledger</span>
+    <div className="flex min-h-svh items-center justify-center bg-bg p-6">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-xs">
+        <div className="mb-6">
+          <span className="block text-2xl font-bold tracking-tight">Reckon</span>
+          <span className="mt-1 block font-mono text-2xs uppercase tracking-wider text-muted-fg">
+            freelance ledger
+          </span>
         </div>
 
-        <div className="tabs">
+        <div className="mb-4 flex gap-0.5 rounded-lg bg-muted p-1">
           <button
             type="button"
-            className={'tab-seg' + (mode === 'signin' ? ' active' : '')}
+            className={tabSeg(mode === 'signin')}
             onClick={() => switchMode('signin')}
           >
             Sign in
           </button>
           <button
             type="button"
-            className={'tab-seg' + (mode === 'register' ? ' active' : '')}
+            className={tabSeg(mode === 'register')}
             onClick={() => switchMode('register')}
           >
             Create account
@@ -64,19 +67,22 @@ export function AuthScreen() {
         </div>
 
         {error && (
-          <div className="banner danger" role="alert">
-            <div>{error}</div>
+          <div
+            className="mb-4 rounded-2xl border border-border bg-error-bg px-3 py-2.5 text-xs text-error-fg"
+            role="alert"
+          >
+            {error}
           </div>
         )}
 
         <form onSubmit={onSubmit} noValidate>
-          <div className="field">
-            <label className="label" htmlFor="authEmail">
+          <div className={field}>
+            <label className={label} htmlFor="authEmail">
               Email
             </label>
             <input
               id="authEmail"
-              className={'input' + (fields.email ? ' invalid' : '')}
+              className={input + (fields.email ? ' border-destructive' : '')}
               type="email"
               autoComplete="email"
               autoFocus
@@ -85,16 +91,16 @@ export function AuthScreen() {
               onChange={(e) => setEmail(e.target.value)}
               aria-invalid={fields.email ? true : undefined}
             />
-            {fields.email && <div className="field-error">{fields.email}</div>}
+            {fields.email && <div className="mt-1.5 text-xs text-error-fg">{fields.email}</div>}
           </div>
 
-          <div className="field">
-            <label className="label" htmlFor="authPassword">
+          <div className={field}>
+            <label className={label} htmlFor="authPassword">
               Password
             </label>
             <input
               id="authPassword"
-              className={'input' + (fields.password ? ' invalid' : '')}
+              className={input + (fields.password ? ' border-destructive' : '')}
               type="password"
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               required
@@ -103,13 +109,13 @@ export function AuthScreen() {
               aria-invalid={fields.password ? true : undefined}
             />
             {fields.password ? (
-              <div className="field-error">{fields.password}</div>
+              <div className="mt-1.5 text-xs text-error-fg">{fields.password}</div>
             ) : mode === 'register' ? (
-              <div className="hint">At least 8 characters.</div>
+              <div className={hint}>At least 8 characters.</div>
             ) : null}
           </div>
 
-          <button className="btn btn-primary btn-block" type="submit" disabled={busy}>
+          <button className={`${btn.primary} ${btnBlock}`} type="submit" disabled={busy}>
             {busy
               ? mode === 'signin'
                 ? 'Signing in…'
@@ -120,18 +126,18 @@ export function AuthScreen() {
           </button>
         </form>
 
-        <p className="auth-foot">
+        <p className="mt-4 mb-0 text-center text-xs text-muted-fg">
           {mode === 'signin' ? (
             <>
               No account yet?{' '}
-              <button className="link-btn" onClick={() => switchMode('register')}>
+              <button className="cursor-pointer border-none bg-none p-0 font-semibold text-primary underline underline-offset-2" onClick={() => switchMode('register')}>
                 Create one
               </button>
             </>
           ) : (
             <>
               Already registered?{' '}
-              <button className="link-btn" onClick={() => switchMode('signin')}>
+              <button className="cursor-pointer border-none bg-none p-0 font-semibold text-primary underline underline-offset-2" onClick={() => switchMode('signin')}>
                 Sign in
               </button>
             </>

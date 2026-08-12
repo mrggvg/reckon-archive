@@ -4,6 +4,7 @@ import { Field, Sheet } from '../components/ui';
 import { DEFAULT_VAT_CLAUSE } from '../lib/storage';
 import type { Profile } from '../lib/types';
 import { useStore } from '../store/context';
+import { btn, btnBlock, hint, input, row2, btnSm } from '../styles/cx';
 
 export function ProfileSheet({ onClose }: { onClose: () => void }) {
   const { data, update, toast } = useStore();
@@ -42,7 +43,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
       <Field label="Full name" htmlFor="pName">
         <input
           id="pName"
-          className="input"
+          className={input}
           type="text"
           placeholder="e.g. Ana Novak s.p."
           value={form.name}
@@ -53,7 +54,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
       <Field label="Registered address" htmlFor="pAddress">
         <input
           id="pAddress"
-          className="input"
+          className={input}
           type="text"
           placeholder="Street, postal code, city"
           value={form.address}
@@ -61,11 +62,11 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
         />
       </Field>
 
-      <div className="row2">
+      <div className={row2}>
         <Field label="Tax number" htmlFor="pTax">
           <input
             id="pTax"
-            className="input"
+            className={input}
             type="text"
             placeholder="SI12345678"
             value={form.taxNumber}
@@ -75,7 +76,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
         <Field label="Registration no." htmlFor="pReg">
           <input
             id="pReg"
-            className="input"
+            className={input}
             type="text"
             placeholder="matična številka"
             value={form.regNumber}
@@ -87,7 +88,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
       <Field label="IBAN / TRR" htmlFor="pIban">
         <input
           id="pIban"
-          className="input"
+          className={input}
           type="text"
           placeholder="SI56 1234 5678 9012 345"
           value={form.iban}
@@ -95,7 +96,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
         />
       </Field>
 
-      <div className="row2">
+      <div className={row2}>
         <Field
           label="Dohodnina rate to set aside (%)"
           htmlFor="pTaxRate"
@@ -103,7 +104,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
         >
           <input
             id="pTaxRate"
-            className="input"
+            className={input}
             type="number"
             min="0"
             max="100"
@@ -116,7 +117,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
         <Field label="VAT payer (davčni zavezanec)" htmlFor="pVat">
           <select
             id="pVat"
-            className="select"
+            className={input}
             value={form.vatPayer}
             onChange={(e) => set('vatPayer', e.target.value as Profile['vatPayer'])}
           >
@@ -126,11 +127,11 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
         </Field>
       </div>
 
-      <div className="row2">
+      <div className={row2}>
         <Field label="Taxation system" htmlFor="pTaxSystem">
           <select
             id="pTaxSystem"
-            className="select"
+            className={input}
             value={form.taxSystem}
             onChange={(e) => set('taxSystem', e.target.value as Profile['taxSystem'])}
           >
@@ -141,7 +142,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
         <Field label="Prispevki per month (€)" htmlFor="pMonthlyContribution">
           <input
             id="pMonthlyContribution"
-            className="input"
+            className={input}
             type="number"
             min="0"
             step="0.01"
@@ -152,7 +153,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
         </Field>
       </div>
 
-      <div className="hint" style={{ marginBottom: 16 }}>
+      <div className={`${hint} mb-4`}>
         Prispevki (PIZ, health, parental, employment) are paid monthly regardless of profit
         — check your eDavki e-kartica for your exact amount, it&apos;s lower in your first
         two years if you&apos;re newly registered.
@@ -165,7 +166,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
       >
         <input
           id="pDefaultDesc"
-          className="input"
+          className={input}
           type="text"
           placeholder="e.g. Reševanje iz vode"
           value={form.defaultDesc}
@@ -180,7 +181,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
       >
         <input
           id="pLastInvoiceNumber"
-          className="input"
+          className={input}
           type="text"
           placeholder="e.g. 003/2026"
           value={form.lastInvoiceNumber}
@@ -191,7 +192,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
       <Field label="Place of issue (kraj izdaje)" htmlFor="pPlaceOfIssue">
         <input
           id="pPlaceOfIssue"
-          className="input"
+          className={input}
           type="text"
           placeholder="e.g. Koper"
           value={form.placeOfIssue}
@@ -206,7 +207,7 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
       >
         <input
           id="pVatClause"
-          className="input"
+          className={input}
           type="text"
           placeholder={DEFAULT_VAT_CLAUSE}
           value={form.vatClause}
@@ -214,13 +215,13 @@ export function ProfileSheet({ onClose }: { onClose: () => void }) {
         />
       </Field>
 
-      <button className="btn btn-primary btn-block" onClick={save}>
+      <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
         Save
       </button>
 
-      <div className="sheet-account">
-        <span className="mono">{user?.email}</span>
-        <button className="btn btn-outline btn-sm" onClick={() => void signOut()}>
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4 text-xs text-muted-fg">
+        <span className="font-mono">{user?.email}</span>
+        <button className={`${btn.outline} ${btnSm}`} onClick={() => void signOut()}>
           Sign out
         </button>
       </div>

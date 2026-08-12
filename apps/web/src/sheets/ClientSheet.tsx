@@ -3,6 +3,7 @@ import { Field, Sheet } from '../components/ui';
 import { uid } from '../lib/storage';
 import type { Client } from '../lib/types';
 import { useStore } from '../store/context';
+import { btn, btnBlock, input, row2 } from '../styles/cx';
 
 export function ClientSheet({
   editing,
@@ -49,7 +50,7 @@ export function ClientSheet({
       <Field label="Company name" htmlFor="clientName">
         <input
           id="clientName"
-          className="input"
+          className={input}
           type="text"
           placeholder="e.g. Nordis d.o.o."
           value={name}
@@ -60,7 +61,7 @@ export function ClientSheet({
       <Field label="Registered address" htmlFor="clientAddress">
         <input
           id="clientAddress"
-          className="input"
+          className={input}
           type="text"
           placeholder="Street, postal code, city"
           value={address}
@@ -68,11 +69,11 @@ export function ClientSheet({
         />
       </Field>
 
-      <div className="row2">
+      <div className={row2}>
         <Field label="Tax number" htmlFor="clientTax">
           <input
             id="clientTax"
-            className="input"
+            className={input}
             type="text"
             placeholder="SI12345678"
             value={taxNumber}
@@ -82,7 +83,7 @@ export function ClientSheet({
         <Field label="Hourly rate (€)" htmlFor="clientRate">
           <input
             id="clientRate"
-            className="input"
+            className={input}
             type="number"
             min="0"
             step="0.5"
@@ -93,18 +94,18 @@ export function ClientSheet({
         </Field>
       </div>
 
-      <div className="row2">
+      <div className={row2}>
         <Field
           label={
             <>
-              Email <span className="optional">(optional)</span>
+              Email <span className="font-normal text-muted-fg">(optional)</span>
             </>
           }
           htmlFor="clientEmail"
         >
           <input
             id="clientEmail"
-            className="input"
+            className={input}
             type="email"
             placeholder="accounting@company.si"
             value={email}
@@ -114,14 +115,14 @@ export function ClientSheet({
         <Field
           label={
             <>
-              Phone <span className="optional">(optional)</span>
+              Phone <span className="font-normal text-muted-fg">(optional)</span>
             </>
           }
           htmlFor="clientPhone"
         >
           <input
             id="clientPhone"
-            className="input"
+            className={input}
             type="tel"
             placeholder="+386 ..."
             value={phone}
@@ -130,7 +131,7 @@ export function ClientSheet({
         </Field>
       </div>
 
-      <button className="btn btn-primary btn-block" onClick={save}>
+      <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
         Save client
       </button>
     </Sheet>

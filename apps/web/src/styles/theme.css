@@ -1,0 +1,90 @@
+@import 'tailwindcss';
+
+/*
+ * Soft Pop design system as Tailwind theme values. Colours are brand tokens, so
+ * they live here; everything else (spacing, radius, shadow, type) uses
+ * Tailwind's own scale. --shadow-xs already equals the system's card shadow,
+ * and rounded-2xl already equals its 1rem container radius.
+ */
+@theme {
+  /* Surfaces */
+  --color-bg: oklch(0.9789 0.0082 121.6272);
+  --color-card: oklch(1 0 0);
+  --color-muted: oklch(0.9551 0 0);
+  --color-fg: oklch(0 0 0);
+  --color-muted-fg: oklch(0.3211 0 0);
+
+  /* Borders */
+  --color-border: oklch(0 0 0);
+  --color-input-border: oklch(0.5555 0 0);
+
+  /* Brand / action */
+  --color-primary: oklch(0.5106 0.2301 276.9656);
+  --color-primary-fg: oklch(1 0 0);
+  --color-secondary: oklch(0.7038 0.123 182.5025);
+  --color-secondary-fg: oklch(1 0 0);
+  --color-accent: oklch(0.7686 0.1647 70.0804);
+  --color-accent-fg: oklch(0 0 0);
+  --color-destructive: oklch(0.6368 0.2078 25.3313);
+  --color-destructive-fg: oklch(1 0 0);
+
+  /* Semantic fills */
+  --color-success-bg: oklch(0.89 0.08 152);
+  --color-success-fg: oklch(0.3 0.1 152);
+  --color-warning-bg: oklch(0.93 0.1 80);
+  --color-warning-fg: oklch(0.4 0.12 60);
+  --color-error-bg: oklch(0.93 0.08 25);
+  --color-error-fg: oklch(0.4 0.15 25);
+  --color-info-bg: oklch(0.89 0.08 250);
+  --color-info-fg: oklch(0.3 0.15 250);
+
+  /* One extra step below text-xs, for the mono micro-labels the system uses. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1.4;
+
+  /* Type */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* The one breakpoint this app has: below it phone chrome, above it a sidebar. */
+  --breakpoint-desk: 900px;
+}
+
+/* No markup to hang a utility on. */
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100svh;
+  }
+
+  ::selection {
+    background: var(--color-primary);
+    color: var(--color-primary-fg);
+  }
+
+  :where(button, a, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

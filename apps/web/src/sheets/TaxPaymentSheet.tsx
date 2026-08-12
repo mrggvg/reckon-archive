@@ -4,6 +4,7 @@ import { todayIso } from '../lib/format';
 import { uid } from '../lib/storage';
 import type { TaxPaymentType } from '../lib/types';
 import { useStore } from '../store/context';
+import { btn, btnBlock, input, row2 } from '../styles/cx';
 
 export function TaxPaymentSheet({ onClose }: { onClose: () => void }) {
   const { update, toast } = useStore();
@@ -30,7 +31,7 @@ export function TaxPaymentSheet({ onClose }: { onClose: () => void }) {
       <Field label="Type" htmlFor="taxPayType">
         <select
           id="taxPayType"
-          className="select"
+          className={input}
           value={type}
           onChange={(e) => setType(e.target.value as TaxPaymentType)}
         >
@@ -40,11 +41,11 @@ export function TaxPaymentSheet({ onClose }: { onClose: () => void }) {
         </select>
       </Field>
 
-      <div className="row2">
+      <div className={row2}>
         <Field label="Date paid" htmlFor="taxPayDate">
           <input
             id="taxPayDate"
-            className="input"
+            className={input}
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
@@ -53,7 +54,7 @@ export function TaxPaymentSheet({ onClose }: { onClose: () => void }) {
         <Field label="Amount (EUR)" htmlFor="taxPayAmount">
           <input
             id="taxPayAmount"
-            className="input"
+            className={input}
             type="number"
             min="0"
             step="0.01"
@@ -66,7 +67,7 @@ export function TaxPaymentSheet({ onClose }: { onClose: () => void }) {
       <Field label="Note (optional)" htmlFor="taxPayNote">
         <input
           id="taxPayNote"
-          className="input"
+          className={input}
           type="text"
           placeholder="e.g. January akontacija"
           value={note}
@@ -74,7 +75,7 @@ export function TaxPaymentSheet({ onClose }: { onClose: () => void }) {
         />
       </Field>
 
-      <button className="btn btn-primary btn-block" onClick={save}>
+      <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
         Save payment
       </button>
     </Sheet>

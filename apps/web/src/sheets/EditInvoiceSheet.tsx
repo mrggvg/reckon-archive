@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Field, Sheet } from '../components/ui';
 import { useStore } from '../store/context';
+import { btn, btnBlock, hint, input, row2 } from '../styles/cx';
 
 export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => void }) {
   const { data, update, toast } = useStore();
@@ -18,7 +19,7 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
   if (!inv) {
     return (
       <Sheet title="Edit invoice" onClose={onClose}>
-        <p className="hint">That invoice no longer exists.</p>
+        <p className={hint}>That invoice no longer exists.</p>
       </Sheet>
     );
   }
@@ -58,7 +59,7 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
       <Field label="Invoice number" htmlFor="editInvNumber">
         <input
           id="editInvNumber"
-          className="input"
+          className={input}
           type="text"
           placeholder="e.g. 003/2026"
           value={number}
@@ -69,18 +70,18 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
       <Field label="Service description" htmlFor="editInvDesc">
         <input
           id="editInvDesc"
-          className="input"
+          className={input}
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
       </Field>
 
-      <div className="row2">
+      <div className={row2}>
         <Field label="Issue date" htmlFor="editInvIssueDate">
           <input
             id="editInvIssueDate"
-            className="input"
+            className={input}
             type="date"
             value={issueDate}
             onChange={(e) => setIssueDate(e.target.value)}
@@ -89,7 +90,7 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
         <Field label="Due date" htmlFor="editInvDueDate">
           <input
             id="editInvDueDate"
-            className="input"
+            className={input}
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
@@ -102,7 +103,7 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
           <Field label="Client" htmlFor="editInvClient">
             <select
               id="editInvClient"
-              className="select"
+              className={input}
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
             >
@@ -114,11 +115,11 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
             </select>
           </Field>
 
-          <div className="row2">
+          <div className={row2}>
             <Field label="Period from" htmlFor="editInvPeriodStart">
               <input
                 id="editInvPeriodStart"
-                className="input"
+                className={input}
                 type="date"
                 value={periodStart}
                 onChange={(e) => setPeriodStart(e.target.value)}
@@ -127,7 +128,7 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
             <Field label="Period to" htmlFor="editInvPeriodEnd">
               <input
                 id="editInvPeriodEnd"
-                className="input"
+                className={input}
                 type="date"
                 value={periodEnd}
                 onChange={(e) => setPeriodEnd(e.target.value)}
@@ -138,7 +139,7 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
           <Field label="Total (EUR)" htmlFor="editInvTotal">
             <input
               id="editInvTotal"
-              className="input"
+              className={input}
               type="number"
               min="0"
               step="0.01"
@@ -148,13 +149,13 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
           </Field>
         </>
       ) : (
-        <div className="hint" style={{ marginBottom: 16 }}>
+        <div className={`${hint} mb-4`}>
           Total, period, and client are derived from linked hours, so they&apos;re locked
           here — edit the underlying entries in Track instead.
         </div>
       )}
 
-      <button className="btn btn-primary btn-block" onClick={save}>
+      <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
         Save changes
       </button>
     </Sheet>

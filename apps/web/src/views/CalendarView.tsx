@@ -9,7 +9,22 @@ import {
   todayIso,
 } from '../lib/format';
 import type { OpenSheet } from '../lib/sheets';
+import {
+  BillingIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ClientsIcon,
+} from '../components/icons';
+import { sessionBillingLabel } from '../lib/invoice';
+
+/** The billing cycle, in order, with the colour each stage owns app-wide. */
+const BILLING_LEGEND = [
+  { key: 'unbilled', label: 'Unbilled', swatch: 'bg-accent' },
+  { key: 'invoiced', label: 'Invoiced', swatch: 'bg-primary' },
+  { key: 'paid', label: 'Paid', swatch: 'bg-secondary' },
+] as const;
 import { useStore } from '../store/context';
+import { btn, btnXs, chip, emptyInline, iconBtn, tabSeg } from '../styles/cx';
 
 export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
   const { data } = useStore();
@@ -18,6 +33,7 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
   const [year, setYear] = useState(now.getFullYear());
   const [hidden, setHidden] = useState<string[]>([]);
   const [focusDay, setFocusDay] = useState(1);
+  const [colorBy, setColorBy] = useState<'client' | 'status'>('status');
   const cellRefs = useRef(new Map<number, HTMLButtonElement>());
 
   const firstOfMonth = new Date(year, month, 1);
@@ -53,17 +69,33 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
       const stat = map.get(s.date) ?? {
         hours: 0,
         unbilled: 0,
+        invoiced: 0,
+        paid: 0,
         entries: 0,
         segments: [] as { clientId: string; hours: number }[],
+        list: [] as EntryLine[],
       };
       stat.hours += h;
       stat.entries += 1;
-      if (!s.invoiced) stat.unbilled += h;
+      const billing = sessionBillingLabel(s, data.invoices) ?? 'unbilled';
+      if (billing === 'paid') stat.paid += h;
+      else if (billing === 'invoiced') stat.invoiced += h;
+      else stat.unbilled += h;
+      stat.list.push({
+        id: s.id,
+        start: s.start,
+        end: s.end,
+        note: s.note,
+        hours: h,
+        client: data.clients.find((c) => c.id === s.clientId)?.name ?? 'Unassigned',
+        billing,
+      });
       const seg = stat.segments.find((x) => x.clientId === s.clientId);
       if (seg) seg.hours += h;
       else stat.segments.push({ clientId: s.clientId, hours: h });
       map.set(s.date, stat);
     });
+    map.forEach((stat) => stat.list.sort((a, b) => a.start.localeCompare(b.start)));
     const totals = [...map.values()];
     return {
       days: map,
@@ -73,7 +105,7 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
       // A full 8h day fills the bar; longer days set their own ceiling.
       peakHours: Math.max(8, ...totals.map((d) => d.hours)),
     };
-  }, [data.sessions, hidden, monthPrefix]);
+  }, [data.sessions, data.invoices, data.clients, hidden, monthPrefix]);
 
   const datesWithEntries = useMemo(
     () => new Set(data.sessions.map((s) => s.date)),
@@ -114,55 +146,59 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 
   if (data.clients.length === 0) {
-    return <div className="empty-inline">Add a client to see the calendar.</div>;
+    return <div className={emptyInline}>Add a client to see the calendar.</div>;
   }
 
   return (
     <>
-      <div className="chips">
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1.5 [scrollbar-width:none]">
         {data.clients.map((c) => {
           const active = !hidden.includes(c.id);
           return (
             <button
               key={c.id}
-              className={'chip' + (active ? '' : ' dimmed')}
-              style={{ ['--dot' as string]: clientColor(c.id) }}
+              className={chip(false) + (active ? '' : ' opacity-50')}
               onClick={() => toggleClient(c.id)}
               aria-pressed={active}
             >
-              <span className="dot" />
+              <span
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ background: clientColor(c.id) }}
+              />
               {c.name}
             </button>
           );
         })}
       </div>
 
-      <div className="cal-nav">
-        <button className="icon-btn" onClick={() => shiftMonth(-1)} aria-label="Previous month">
-          ‹
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <button className={iconBtn} onClick={() => shiftMonth(-1)} aria-label="Previous month">
+          <ChevronLeftIcon />
         </button>
-        <div className="cal-nav-center">
-          <h2 className="cal-month-label" aria-live="polite">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <h2 className="whitespace-nowrap text-base font-semibold" aria-live="polite">
             {MONTH_NAMES[month]} {year}
           </h2>
           {!isCurrentMonth && (
-            <button className="btn btn-outline btn-xs" onClick={jumpToToday}>
+            <button className={`${btn.outline} ${btnXs}`} onClick={jumpToToday}>
               Today
             </button>
           )}
         </div>
-        <button className="icon-btn" onClick={() => shiftMonth(1)} aria-label="Next month">
-          ›
+        <button className={iconBtn} onClick={() => shiftMonth(1)} aria-label="Next month">
+          <ChevronRightIcon />
         </button>
       </div>
 
-      <div className="summary-bar">
-        <div className="split">
+      <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-muted px-3.5 py-2.5 text-xs text-muted-fg">
+        <div className="flex gap-5">
           <div>
-            <span className="n">{fmtHours(monthHours)}</span> this month
+            <span className="font-mono text-sm font-bold text-fg">{fmtHours(monthHours)}</span>{' '}
+            this month
           </div>
           <div>
-            <span className="n">{fmtHours(monthUnbilled)}</span> unbilled
+            <span className="font-mono text-sm font-bold text-fg">{fmtHours(monthUnbilled)}</span>{' '}
+            unbilled
           </div>
         </div>
         <div>
@@ -170,25 +206,61 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
         </div>
       </div>
 
-      <div className="cal-weekdays" aria-hidden="true">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-1">
+          <button className={tabSeg(colorBy === 'status')} onClick={() => setColorBy('status')}>
+            <BillingIcon className="size-3.5" />
+            By status
+          </button>
+          <button className={tabSeg(colorBy === 'client')} onClick={() => setColorBy('client')}>
+            <ClientsIcon className="size-3.5" />
+            By client
+          </button>
+        </div>
+
+        {colorBy === 'status' && (
+          <div className="flex flex-wrap items-center gap-3 text-2xs text-muted-fg">
+            {BILLING_LEGEND.map((l) => (
+              <span key={l.label} className="inline-flex items-center gap-1.5">
+                <span className={`size-2.5 rounded-full ${l.swatch}`} />
+                {l.label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mb-1.5 grid grid-cols-7 gap-1 desk:gap-1.5" aria-hidden="true">
         {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((w, i) => (
-          <span key={w} className={i > 4 ? 'weekend' : undefined}>
+          <span
+            key={w}
+            className={
+              'text-center font-mono text-2xs uppercase tracking-wider text-muted-fg' +
+              (i > 4 ? ' opacity-50' : '')
+            }
+          >
             {w}
           </span>
         ))}
       </div>
 
       <div
-        className="cal-days"
+        className="grid grid-cols-7 gap-1 desk:gap-1.5"
         role="grid"
         aria-label={`${MONTH_NAMES[month]} ${year}`}
         onKeyDown={onGridKeyDown}
       >
         {weeks.map((week, wi) => (
-          <div className="cal-week" role="row" key={wi}>
+          <div className="contents" role="row" key={wi}>
             {week.map((day, di) => {
               if (day === null) {
-                return <div className="cal-cell blank" role="gridcell" key={`b${wi}-${di}`} />;
+                return (
+                  <div
+                    className="invisible aspect-square desk:aspect-auto desk:h-28"
+                    role="gridcell"
+                    key={`b${wi}-${di}`}
+                  />
+                );
               }
               const iso = isoOf(new Date(year, month, day));
               const stat = days.get(iso);
@@ -208,15 +280,19 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
                   }}
                   tabIndex={day === Math.min(focusDay, daysInMonth) ? 0 : -1}
                   className={
-                    'cal-cell' +
-                    (iso === today ? ' today' : '') +
-                    (stat ? ' has-entries' : '')
+                    'group relative flex aspect-square min-h-14 cursor-pointer flex-col gap-1 rounded-md border p-1.5 text-left transition-all duration-100 hover:border-primary hover:bg-primary/12 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/15 desk:aspect-auto desk:h-28 desk:p-2 ' +
+                    (stat
+                      ? 'border-border bg-card shadow-xs'
+                      : 'border-transparent bg-muted') +
+                    (iso === today ? ' border-2 border-primary' : '')
                   }
                   aria-label={
                     stat
                       ? `${label} — ${fmtHours(stat.hours)} across ${stat.entries} ${
                           stat.entries === 1 ? 'entry' : 'entries'
-                        }${stat.unbilled > 0 ? `, ${fmtHours(stat.unbilled)} unbilled` : ''}`
+                        }${BILLING_LEGEND.filter((l) => stat[l.key] > 0)
+                          .map((l) => `, ${fmtHours(stat[l.key])} ${l.label.toLowerCase()}`)
+                          .join('')}`
                       : `${label} — no hours logged, add an entry`
                   }
                   onClick={() =>
@@ -225,27 +301,116 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
                       : openSheet({ kind: 'entry', prefill: { date: iso } })
                   }
                 >
-                  <span className="cal-cell-top">
-                    <span className="cal-daynum">{day}</span>
+                  <span className="flex items-baseline justify-between gap-1">
+                    <span
+                      className={
+                        'font-mono text-xs leading-none ' +
+                        (iso === today
+                          ? 'font-bold text-primary'
+                          : stat
+                            ? 'font-bold text-fg'
+                            : 'text-muted-fg')
+                      }
+                    >
+                      {day}
+                    </span>
                     {stat && (
                       <span
-                        className={'cal-hours' + (stat.unbilled > 0 ? ' unbilled' : '')}
+                        className={
+                          'font-mono text-2xs font-semibold leading-none ' +
+                          (stat.unbilled > 0
+                            ? 'text-warning-fg'
+                            : stat.invoiced > 0
+                              ? 'text-primary'
+                              : 'text-secondary')
+                        }
                       >
                         {fmtHoursCompact(stat.hours)}
                       </span>
                     )}
                   </span>
+                  {/* Entry chips — desktop only; the phone cell is too small. */}
                   {stat && (
-                    <span className="cal-load" aria-hidden="true">
+                    <span className="hidden min-h-0 flex-1 flex-col gap-0.5 overflow-hidden desk:flex">
+                      {stat.list.slice(0, MAX_CHIPS).map((e) => (
+                        <span
+                          key={e.id}
+                          className="flex items-center gap-1 truncate text-2xs leading-tight text-muted-fg"
+                        >
+                          <span
+                            className={`size-1.5 shrink-0 rounded-full ${swatchFor(e.billing)}`}
+                          />
+                          <span className="truncate">{e.client}</span>
+                        </span>
+                      ))}
+                      {stat.list.length > MAX_CHIPS && (
+                        <span className="text-2xs font-semibold leading-tight text-muted-fg">
+                          +{stat.list.length - MAX_CHIPS} more
+                        </span>
+                      )}
+                    </span>
+                  )}
+
+                  {stat && (
+                    <span
+                      className="mt-auto block h-1 shrink-0 overflow-hidden rounded-sm bg-muted desk:h-1.5"
+                      aria-hidden="true"
+                    >
                       <span
-                        className="cal-load-fill"
+                        className="flex h-full gap-px overflow-hidden rounded-sm"
                         style={{ width: `${Math.min(100, (stat.hours / peakHours) * 100)}%` }}
                       >
-                        {stat.segments.map((seg) => (
-                          <span
-                            key={seg.clientId}
-                            style={{ flex: seg.hours, background: clientColor(seg.clientId) }}
-                          />
+                        {colorBy === 'client'
+                          ? stat.segments.map((seg) => (
+                              <span
+                                key={seg.clientId}
+                                className="block h-full"
+                                style={{ flex: seg.hours, background: clientColor(seg.clientId) }}
+                              />
+                            ))
+                          : BILLING_LEGEND.filter((l) => stat[l.key] > 0).map((l) => (
+                              <span
+                                key={l.key}
+                                className={`block h-full ${l.swatch}`}
+                                style={{ flex: stat[l.key] }}
+                              />
+                            ))}
+                      </span>
+                    </span>
+                  )}
+
+                  {/* Hover/focus card. Anchored away from the edge columns so it
+                      can't run off the grid. */}
+                  {stat && (
+                    <span
+                      className={
+                        'pointer-events-none invisible absolute top-full z-50 mt-1 hidden w-64 flex-col gap-2 rounded-2xl border border-border bg-card p-3 opacity-0 shadow-lg transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100 desk:flex ' +
+                        (di <= 1 ? 'left-0' : di >= 5 ? 'right-0' : 'left-1/2 -translate-x-1/2')
+                      }
+                      role="presentation"
+                    >
+                      <span className="flex items-baseline justify-between gap-2 border-b border-border pb-2">
+                        <span className="text-sm font-semibold">{label}</span>
+                        <span className="font-mono text-xs text-muted-fg">
+                          {fmtHours(stat.hours)}
+                        </span>
+                      </span>
+                      <span className="flex max-h-52 flex-col gap-1.5 overflow-y-auto">
+                        {stat.list.map((e) => (
+                          <span key={e.id} className="flex items-start gap-2 text-xs">
+                            <span
+                              className={`mt-1 size-2 shrink-0 rounded-full ${swatchFor(e.billing)}`}
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-medium">{e.client}</span>
+                              {e.note && (
+                                <span className="block truncate text-muted-fg">{e.note}</span>
+                              )}
+                            </span>
+                            <span className="whitespace-nowrap font-mono text-2xs text-muted-fg">
+                              {e.start}–{e.end}
+                            </span>
+                          </span>
                         ))}
                       </span>
                     </span>
@@ -260,9 +425,29 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
   );
 }
 
+interface EntryLine {
+  id: string;
+  start: string;
+  end: string;
+  note: string;
+  hours: number;
+  client: string;
+  billing: 'unbilled' | 'invoiced' | 'paid';
+}
+
 interface DayStat {
   hours: number;
+  /** Hours split by where they are in the billing cycle. */
   unbilled: number;
+  invoiced: number;
+  paid: number;
   entries: number;
   segments: { clientId: string; hours: number }[];
+  list: EntryLine[];
 }
+
+/** How many entry chips fit in a cell before it collapses to "+n more". */
+const MAX_CHIPS = 3;
+
+const swatchFor = (billing: EntryLine['billing']) =>
+  BILLING_LEGEND.find((l) => l.key === billing)?.swatch ?? 'bg-muted';

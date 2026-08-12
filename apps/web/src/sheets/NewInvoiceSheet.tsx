@@ -10,6 +10,7 @@ import {
 import { nextInvoiceNumber } from '../lib/invoice';
 import { uid } from '../lib/storage';
 import { useStore } from '../store/context';
+import { btn, btnBlock, field, hint, input, label, row2 } from '../styles/cx';
 
 export function NewInvoiceSheet({
   clientId: initialClientId,
@@ -91,7 +92,7 @@ export function NewInvoiceSheet({
   if (data.clients.length === 0) {
     return (
       <Sheet title="New invoice" onClose={onClose}>
-        <p className="hint">Add a client first.</p>
+        <p className={hint}>Add a client first.</p>
       </Sheet>
     );
   }
@@ -101,7 +102,7 @@ export function NewInvoiceSheet({
       <Field label="Client" htmlFor="invClient">
         <select
           id="invClient"
-          className="select"
+          className={input}
           value={clientId}
           onChange={(e) => {
             setClientId(e.target.value);
@@ -117,25 +118,25 @@ export function NewInvoiceSheet({
       </Field>
 
       {candidates.length === 0 ? (
-        <p className="hint" style={{ marginBottom: 16 }}>
+        <p className={`${hint} mb-4`}>
           No unbilled hours logged for this client yet.
         </p>
       ) : (
-        <div className="field">
-          <span className="label">Unbilled sessions</span>
-          <div className="checklist">
+        <div className={field}>
+          <span className={label}>Unbilled sessions</span>
+          <div className="flex flex-col gap-2">
             {candidates.map((s) => (
-              <label className="check-row" key={s.id}>
+              <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2.5" key={s.id}>
                 <input
                   type="checkbox"
                   checked={!unchecked.includes(s.id)}
                   onChange={() => toggle(s.id)}
                 />
-                <span className="info">
+                <span className="flex-1 text-sm">
                   {fmtDateLabel(s.date)} · {s.start}–{s.end}
                   {s.note ? ' · ' + s.note : ''}
                 </span>
-                <span className="amt">{fmtMoney(hoursBetween(s.start, s.end) * rate)}</span>
+                <span className="font-mono text-sm text-muted-fg">{fmtMoney(hoursBetween(s.start, s.end) * rate)}</span>
               </label>
             ))}
           </div>
@@ -145,7 +146,7 @@ export function NewInvoiceSheet({
       <Field label="Service description" htmlFor="invDesc">
         <input
           id="invDesc"
-          className="input"
+          className={input}
           type="text"
           placeholder="e.g. Reševanje iz vode"
           value={description}
@@ -153,11 +154,11 @@ export function NewInvoiceSheet({
         />
       </Field>
 
-      <div className="row2">
+      <div className={row2}>
         <Field label="Issue date" htmlFor="invDate">
           <input
             id="invDate"
-            className="input"
+            className={input}
             type="date"
             value={issueDate}
             onChange={(e) => setIssueDate(e.target.value)}
@@ -166,7 +167,7 @@ export function NewInvoiceSheet({
         <Field label="Due date" htmlFor="invDue">
           <input
             id="invDue"
-            className="input"
+            className={input}
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
@@ -175,7 +176,7 @@ export function NewInvoiceSheet({
       </div>
 
       <button
-        className="btn btn-primary btn-block"
+        className={`${btn.primary} ${btnBlock}`}
         disabled={checkedIds.length === 0}
         onClick={generate}
       >

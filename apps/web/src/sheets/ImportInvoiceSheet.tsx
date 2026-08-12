@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Field, Sheet } from '../components/ui';
 import { uid } from '../lib/storage';
 import { useStore } from '../store/context';
+import { btn, btnBlock, hint, input, row2 } from '../styles/cx';
 
 export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
   const { data, update, toast } = useStore();
@@ -56,14 +57,14 @@ export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
   if (data.clients.length === 0) {
     return (
       <Sheet title="Import invoice" onClose={onClose}>
-        <p className="hint">Add a client first.</p>
+        <p className={hint}>Add a client first.</p>
       </Sheet>
     );
   }
 
   return (
     <Sheet title="Import invoice" onClose={onClose}>
-      <div className="hint" style={{ marginBottom: 16 }}>
+      <div className={`${hint} mb-4`}>
         For invoices you already made by hand — this just adds them to your history, it
         won&apos;t link any hours.
       </div>
@@ -71,7 +72,7 @@ export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
       <Field label="Client" htmlFor="impClient">
         <select
           id="impClient"
-          className="select"
+          className={input}
           value={clientId}
           onChange={(e) => setClientId(e.target.value)}
         >
@@ -83,11 +84,11 @@ export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
         </select>
       </Field>
 
-      <div className="row2">
+      <div className={row2}>
         <Field label="Invoice number" htmlFor="impNumber">
           <input
             id="impNumber"
-            className="input"
+            className={input}
             type="text"
             placeholder="e.g. 002/2026"
             value={number}
@@ -97,7 +98,7 @@ export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
         <Field label="Total (EUR)" htmlFor="impTotal">
           <input
             id="impTotal"
-            className="input"
+            className={input}
             type="number"
             min="0"
             step="0.01"
@@ -111,7 +112,7 @@ export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
       <Field label="Service description" htmlFor="impDesc">
         <input
           id="impDesc"
-          className="input"
+          className={input}
           type="text"
           placeholder="e.g. Reševanje iz vode"
           value={description}
@@ -119,11 +120,11 @@ export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
         />
       </Field>
 
-      <div className="row2">
+      <div className={row2}>
         <Field label="Period from" htmlFor="impPeriodStart">
           <input
             id="impPeriodStart"
-            className="input"
+            className={input}
             type="date"
             value={periodStart}
             onChange={(e) => setPeriodStart(e.target.value)}
@@ -132,7 +133,7 @@ export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
         <Field label="Period to" htmlFor="impPeriodEnd">
           <input
             id="impPeriodEnd"
-            className="input"
+            className={input}
             type="date"
             value={periodEnd}
             onChange={(e) => setPeriodEnd(e.target.value)}
@@ -140,11 +141,11 @@ export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
         </Field>
       </div>
 
-      <div className="row2">
+      <div className={row2}>
         <Field label="Issue date" htmlFor="impIssueDate">
           <input
             id="impIssueDate"
-            className="input"
+            className={input}
             type="date"
             value={issueDate}
             onChange={(e) => setIssueDate(e.target.value)}
@@ -153,7 +154,7 @@ export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
         <Field label="Due date" htmlFor="impDueDate">
           <input
             id="impDueDate"
-            className="input"
+            className={input}
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
@@ -164,7 +165,7 @@ export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
       <Field label="Status" htmlFor="impStatus">
         <select
           id="impStatus"
-          className="select"
+          className={input}
           value={status}
           onChange={(e) => setStatus(e.target.value as 'unpaid' | 'paid')}
         >
@@ -177,7 +178,7 @@ export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
         <Field label="Paid on" htmlFor="impPaidDate">
           <input
             id="impPaidDate"
-            className="input"
+            className={input}
             type="date"
             value={paidDate}
             onChange={(e) => setPaidDate(e.target.value)}
@@ -185,7 +186,7 @@ export function ImportInvoiceSheet({ onClose }: { onClose: () => void }) {
         </Field>
       )}
 
-      <button className="btn btn-primary btn-block" onClick={save}>
+      <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
         Add to history
       </button>
     </Sheet>

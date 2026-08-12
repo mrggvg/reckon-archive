@@ -8,8 +8,8 @@ export function AuthGate() {
 
   if (status === 'loading') {
     return (
-      <div className="auth-splash">
-        <span className="mark">Reckon</span>
+      <div className="flex min-h-svh items-center justify-center text-2xl font-bold tracking-tight text-muted-fg">
+        Reckon
       </div>
     );
   }

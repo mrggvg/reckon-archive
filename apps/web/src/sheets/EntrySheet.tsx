@@ -5,6 +5,7 @@ import type { EntryPrefill } from '../lib/sheets';
 import { uid } from '../lib/storage';
 import type { Session } from '../lib/types';
 import { useStore } from '../store/context';
+import { btn, btnBlock, hint, input, row2 } from '../styles/cx';
 
 export function EntrySheet({
   editing,
@@ -53,7 +54,7 @@ export function EntrySheet({
   if (data.clients.length === 0) {
     return (
       <Sheet title="Log hours" onClose={onClose}>
-        <p className="hint">Add a client first — hours are always logged against one.</p>
+        <p className={hint}>Add a client first — hours are always logged against one.</p>
       </Sheet>
     );
   }
@@ -63,7 +64,7 @@ export function EntrySheet({
       <Field label="Client" htmlFor="entryClient">
         <select
           id="entryClient"
-          className="select"
+          className={input}
           value={clientId}
           onChange={(e) => setClientId(e.target.value)}
         >
@@ -78,18 +79,18 @@ export function EntrySheet({
       <Field label="Date" htmlFor="entryDate">
         <input
           id="entryDate"
-          className="input"
+          className={input}
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
         />
       </Field>
 
-      <div className="row2">
+      <div className={row2}>
         <Field label="In" htmlFor="entryStart">
           <input
             id="entryStart"
-            className="input"
+            className={input}
             type="time"
             value={start}
             onChange={(e) => setStart(e.target.value)}
@@ -98,7 +99,7 @@ export function EntrySheet({
         <Field label="Out" htmlFor="entryEnd">
           <input
             id="entryEnd"
-            className="input"
+            className={input}
             type="time"
             value={end}
             onChange={(e) => setEnd(e.target.value)}
@@ -109,7 +110,7 @@ export function EntrySheet({
       <Field label="Position / what you worked on" htmlFor="entryNote">
         <input
           id="entryNote"
-          className="input"
+          className={input}
           type="text"
           placeholder="e.g. backend integration"
           value={note}
@@ -117,7 +118,7 @@ export function EntrySheet({
         />
       </Field>
 
-      <button className="btn btn-primary btn-block" onClick={save}>
+      <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
         Save entry
       </button>
     </Sheet>

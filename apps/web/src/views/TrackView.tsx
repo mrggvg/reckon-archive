@@ -1,4 +1,13 @@
 import { useMemo, useState } from 'react';
+import {
+  CalendarIcon,
+  ClockIcon,
+  EditIcon,
+  ListIcon,
+  PlusIcon,
+  RepeatIcon,
+  TrashIcon,
+} from '../components/icons';
 import { EmptyState, SectionHead } from '../components/ui';
 import {
   clientColor,
@@ -10,6 +19,7 @@ import {
 import type { OpenSheet } from '../lib/sheets';
 import { sessionBillingLabel } from '../lib/invoice';
 import { uid } from '../lib/storage';
+import { btn, btnSm, chip, iconBtn, rowActions, tabSeg } from '../styles/cx';
 import type { Session } from '../lib/types';
 import { useStore } from '../store/context';
 import { CalendarView } from './CalendarView';
@@ -103,44 +113,46 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
       <SectionHead
         title="Hours"
         count={`${visible.length} ${visible.length === 1 ? 'entry' : 'entries'}`}
-      />
+      >
+        <button
+          className={`${btn.primary} ${btnSm} max-desk:hidden`}
+          onClick={() => openSheet({ kind: 'entry' })}
+        >
+          <PlusIcon className="size-3.5" />
+          Log hours
+        </button>
+      </SectionHead>
 
       {data.sessions.length > 0 && (
-        <div className="quickrow">
-          <button className="btn btn-outline btn-sm" onClick={repeatLast}>
-            ↻ Repeat last entry
+        <div className="mb-4 flex items-stretch gap-2">
+          <button className={`${btn.outline} ${btnSm}`} onClick={repeatLast}>
+            <RepeatIcon className="size-3.5" />
+            Repeat last entry
           </button>
         </div>
       )}
 
-      <div className="tabs">
-        <button
-          className={'tab-seg' + (view === 'list' ? ' active' : '')}
-          onClick={() => setView('list')}
-        >
+      <div className="mb-4 flex gap-0.5 rounded-lg bg-muted p-1">
+        <button className={tabSeg(view === 'list')} onClick={() => setView('list')}>
+          <ListIcon className="size-3.5" />
           List
         </button>
-        <button
-          className={'tab-seg' + (view === 'calendar' ? ' active' : '')}
-          onClick={() => setView('calendar')}
-        >
+        <button className={tabSeg(view === 'calendar')} onClick={() => setView('calendar')}>
+          <CalendarIcon className="size-3.5" />
           Calendar
         </button>
       </div>
 
       {view === 'list' ? (
         <>
-          <div className="chips">
-            <button
-              className={'chip' + (activeFilter === 'all' ? ' active' : '')}
-              onClick={() => setFilter('all')}
-            >
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1.5 [scrollbar-width:none]">
+            <button className={chip(activeFilter === 'all')} onClick={() => setFilter('all')}>
               All
             </button>
             {data.clients.map((c) => (
               <button
                 key={c.id}
-                className={'chip' + (activeFilter === c.id ? ' active' : '')}
+                className={chip(activeFilter === c.id)}
                 onClick={() => setFilter(c.id)}
               >
                 {c.name}
@@ -150,20 +162,29 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
 
           {data.sessions.length === 0 ? (
             <EmptyState
-              glyph="⏱"
+              icon={<ClockIcon className="size-8" />}
               lines={['No hours logged yet.', 'Tap + to punch in your first entry.']}
             />
           ) : visible.length === 0 ? (
-            <EmptyState glyph="⏱" lines={['No hours for this client yet.']} />
+            <EmptyState
+              icon={<ClockIcon className="size-8" />}
+              lines={['No hours for this client yet.']}
+            />
           ) : (
             <>
-              <div className="summary-bar">
-                <div className="split">
+              <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-muted px-3.5 py-2.5 text-xs text-muted-fg">
+                <div className="flex gap-5">
                   <div>
-                    <span className="n">{fmtHours(totalHours)}</span> total
+                    <span className="font-mono text-sm font-bold text-fg">
+                      {fmtHours(totalHours)}
+                    </span>{' '}
+                    total
                   </div>
                   <div>
-                    <span className="n">{fmtHours(unbilledHours)}</span> unbilled
+                    <span className="font-mono text-sm font-bold text-fg">
+                      {fmtHours(unbilledHours)}
+                    </span>{' '}
+                    unbilled
                   </div>
                 </div>
               </div>
@@ -174,8 +195,8 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
                   0,
                 );
                 return (
-                  <div className="day-group" key={date}>
-                    <div className="day-label">
+                  <div className="mb-4" key={date}>
+                    <div className="mb-1.5 ml-0.5 flex justify-between font-mono text-2xs uppercase tracking-wider text-muted-fg">
                       <span>{fmtDateLabel(date)}</span>
                       <span>{fmtHours(dayTotal)}</span>
                     </div>
@@ -217,33 +238,42 @@ export function PunchRow({
   const billing = sessionBillingLabel(session, data.invoices);
   return (
     <div
-      className={'punch' + (session.invoiced ? ' billed' : '')}
-      style={{ ['--accent-color' as string]: clientColor(session.clientId) }}
+      className={
+        'mb-2 flex items-center gap-2.5 rounded-lg border border-l-4 border-border bg-card px-3 py-2.5 shadow-xs' +
+        (session.invoiced ? ' opacity-60' : '')
+      }
+      style={{ borderLeftColor: clientColor(session.clientId) }}
     >
-      <div className="meta">
-        <span className="client-tag">{clientName}</span>
-        {session.note ? <div className="note">{session.note}</div> : null}
-        <div className="dur">
+      <div className="min-w-0 flex-1">
+        <span className="mb-0.5 inline-block rounded-md bg-muted px-2 py-0.5 text-2xs font-semibold text-fg">
+          {clientName}
+        </span>
+        {session.note ? (
+          <div className="truncate text-xs text-muted-fg">{session.note}</div>
+        ) : null}
+        <div className="mt-px font-mono text-2xs text-muted-fg">
           {fmtHours(dur)}
           {billing ? (
             <>
               {' · '}
-              <span className={'dur-status ' + billing}>{billing}</span>
+              <span className={billing === 'paid' ? 'font-semibold text-secondary' : ''}>
+                {billing}
+              </span>
             </>
           ) : null}
         </div>
       </div>
-      <div className="times">
+      <div className="flex items-center gap-1.5 whitespace-nowrap font-mono text-sm font-medium">
         {session.start}
-        <span className="arrow">→</span>
+        <span className="text-xs text-muted-fg">→</span>
         {session.end}
       </div>
-      <div className="row-actions">
-        <button className="icon-btn" onClick={onEdit} aria-label="Edit entry">
-          ✎
+      <div className={rowActions}>
+        <button className={`${iconBtn} size-7`} onClick={onEdit} aria-label="Edit entry">
+          <EditIcon className="size-3.5" />
         </button>
-        <button className="icon-btn" onClick={onDelete} aria-label="Delete entry">
-          🗑
+        <button className={`${iconBtn} size-7`} onClick={onDelete} aria-label="Delete entry">
+          <TrashIcon className="size-3.5" />
         </button>
       </div>
     </div>

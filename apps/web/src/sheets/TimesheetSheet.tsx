@@ -1,7 +1,9 @@
+import { DownloadIcon, PrinterIcon } from '../components/icons';
 import { Sheet } from '../components/ui';
 import { downloadBlob, toCsv } from '../lib/download';
 import { fmtDMY, fmtHours, hoursBetween, todayIso } from '../lib/format';
 import { useStore } from '../store/context';
+import { btn, hint } from '../styles/cx';
 
 export function TimesheetSheet({ id, onClose }: { id: string; onClose: () => void }) {
   const { data, toast } = useStore();
@@ -10,7 +12,7 @@ export function TimesheetSheet({ id, onClose }: { id: string; onClose: () => voi
   if (!inv) {
     return (
       <Sheet title="Working hours" onClose={onClose}>
-        <p className="hint">That invoice no longer exists.</p>
+        <p className={hint}>That invoice no longer exists.</p>
       </Sheet>
     );
   }
@@ -53,7 +55,7 @@ export function TimesheetSheet({ id, onClose }: { id: string; onClose: () => voi
           </div>
           <div className="ts-doc-ref">
             <div className="k">Ref. invoice</div>
-            <div className="v mono">#{inv.number}</div>
+            <div className="v font-mono">#{inv.number}</div>
           </div>
         </div>
 
@@ -95,11 +97,11 @@ export function TimesheetSheet({ id, onClose }: { id: string; onClose: () => voi
             ) : (
               sessions.map((s, i) => (
                 <tr key={s.id}>
-                  <td className="mono">{i + 1}</td>
+                  <td className="font-mono">{i + 1}</td>
                   <td>{fmtDMY(s.date)}</td>
-                  <td className="mono">{s.start}</td>
-                  <td className="mono">{s.end}</td>
-                  <td className="mono">{fmtHours(hoursBetween(s.start, s.end))}</td>
+                  <td className="font-mono">{s.start}</td>
+                  <td className="font-mono">{s.end}</td>
+                  <td className="font-mono">{fmtHours(hoursBetween(s.start, s.end))}</td>
                   <td>{s.note || '—'}</td>
                 </tr>
               ))
@@ -108,7 +110,7 @@ export function TimesheetSheet({ id, onClose }: { id: string; onClose: () => voi
           <tfoot>
             <tr>
               <td colSpan={4}>Total</td>
-              <td className="mono">{fmtHours(totalHours)}</td>
+              <td className="font-mono">{fmtHours(totalHours)}</td>
               <td />
             </tr>
           </tfoot>
@@ -117,11 +119,13 @@ export function TimesheetSheet({ id, onClose }: { id: string; onClose: () => voi
         <div className="ts-doc-foot">Generated {fmtDMY(todayIso())} · Reckon</div>
       </div>
 
-      <div className="btn-row no-print" style={{ marginTop: 16 }}>
-        <button className="btn btn-outline" onClick={() => window.print()}>
+      <div className="no-print mt-4 flex flex-wrap gap-2 [&>button]:flex-1 mt-4">
+        <button className={btn.outline} onClick={() => window.print()}>
+          <PrinterIcon className="size-3.5" />
           Print / Save PDF
         </button>
-        <button className="btn btn-primary" onClick={downloadCsv}>
+        <button className={btn.primary} onClick={downloadCsv}>
+          <DownloadIcon className="size-3.5" />
           Download CSV
         </button>
       </div>

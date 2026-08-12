@@ -52,8 +52,9 @@ export function sessionBillingLabel(
   return invoice?.status === 'paid' ? 'paid' : 'invoiced';
 }
 
-export const STATUS_BADGE: Record<InvoiceStatus, string> = {
-  paid: 'badge-success',
-  unpaid: 'badge-warning',
-  overdue: 'badge-error',
+/** Which badge variant each invoice state uses. */
+export const STATUS_BADGE: Record<InvoiceStatus, 'success' | 'warning' | 'error'> = {
+  paid: 'success',
+  unpaid: 'warning',
+  overdue: 'error',
 };

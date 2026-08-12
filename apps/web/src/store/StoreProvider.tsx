@@ -53,7 +53,13 @@ export function StoreProvider({
   return (
     <StoreContext.Provider value={value}>
       {children}
-      <div className={'toast' + (toastShown ? ' show' : '')} role="status">
+      <div
+        className={
+          'pointer-events-none fixed bottom-23 left-1/2 z-200 max-w-xs -translate-x-1/2 rounded-xl bg-fg px-5 py-3 text-sm font-medium text-white transition-all duration-250 desk:right-6 desk:bottom-6 desk:left-auto desk:translate-x-0 ' +
+          (toastShown ? 'translate-y-0 opacity-100' : 'invisible translate-y-20 opacity-0')
+        }
+        role="status"
+      >
         {toastMsg}
       </div>
     </StoreContext.Provider>

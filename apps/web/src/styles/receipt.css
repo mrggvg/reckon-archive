@@ -304,7 +304,7 @@
 /* ---------- Timesheet (working hours) ---------- */
 .ts-doc {
   background: #fff;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: 2px;
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.08),
@@ -315,14 +315,14 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  border-bottom: 2px solid var(--fg);
+  border-bottom: 2px solid var(--color-fg);
   padding-bottom: 14px;
   margin-bottom: 14px;
 }
 .ts-doc-label {
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--muted-fg);
+  color: var(--color-muted-fg);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   margin-bottom: 6px;
@@ -335,9 +335,9 @@
   text-align: right;
 }
 .ts-doc-ref .k {
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 9.5px;
-  color: var(--muted-fg);
+  color: var(--color-muted-fg);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 3px;
@@ -352,10 +352,10 @@
   gap: 5px;
   font-size: 12.5px;
   margin-bottom: 16px;
-  color: var(--muted-fg);
+  color: var(--color-muted-fg);
 }
 .ts-doc-sub .k {
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -363,9 +363,9 @@
 }
 .ts-doc-foot {
   margin-top: 14px;
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 10.5px;
-  color: var(--muted-fg);
+  color: var(--color-muted-fg);
   text-align: right;
 }
 .ts-table {
@@ -375,21 +375,21 @@
 }
 .ts-table th {
   text-align: left;
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--muted-fg);
+  color: var(--color-muted-fg);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   padding: 8px 6px;
-  border-bottom: 2px solid var(--border);
+  border-bottom: 2px solid var(--color-border);
 }
 .ts-table td {
   padding: 9px 6px;
-  border-bottom: 1px solid var(--muted);
+  border-bottom: 1px solid var(--color-muted);
 }
 .ts-table tfoot td {
   font-weight: 700;
-  border-top: 2px solid var(--border);
+  border-top: 2px solid var(--color-border);
   border-bottom: none;
   padding-top: 10px;
 }
@@ -421,8 +421,12 @@
     padding: 0;
     overflow: visible;
   }
-  .print-doc .sheet-handle,
-  .print-doc .sheet-head,
+  /* The sheet body is the scroll container on screen; printing needs it open. */
+  .print-doc .sheet-body {
+    overflow: visible !important;
+    max-height: none !important;
+    padding: 0 !important;
+  }
   .print-doc .no-print {
     display: none !important;
   }

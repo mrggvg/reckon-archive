@@ -1,9 +1,18 @@
+import {
+  AlertIcon,
+  DownloadIcon,
+  FilePlusIcon,
+  InvoiceIcon,
+  ListIcon,
+  PlusIcon,
+} from '../components/icons';
 import { EmptyState, SectionHead } from '../components/ui';
 import { downloadBlob, toCsv } from '../lib/download';
 import { fmtDMY, fmtMoney, todayIso } from '../lib/format';
 import { STATUS_BADGE, invoiceSortKey, invoiceStatusComputed } from '../lib/invoice';
 import type { OpenSheet } from '../lib/sheets';
 import { useStore } from '../store/context';
+import { badge, btn, btnSm, btnXs } from '../styles/cx';
 
 export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
   const { data, toast } = useStore();
@@ -66,34 +75,38 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
     <>
       <SectionHead title="Invoices" count={data.invoices.length}>
         <button
-          className="btn btn-primary btn-sm desktop-only"
+          className={`${btn.primary} ${btnSm} max-desk:hidden`}
           onClick={() => openSheet({ kind: 'newInvoice' })}
         >
-          + New invoice
+          <PlusIcon className="size-3.5" />
+          New invoice
         </button>
       </SectionHead>
 
-      <div className="btn-row" style={{ marginBottom: 16 }}>
+      <div className="mb-4 flex flex-wrap gap-2">
         <button
-          className="btn btn-outline btn-sm"
+          className={`${btn.outline} ${btnSm} flex-1`}
           onClick={() => openSheet({ kind: 'importInvoice' })}
         >
+          <FilePlusIcon className="size-3.5" />
           Import a manually-made invoice
         </button>
-        <button className="btn btn-outline btn-sm" onClick={exportCsv}>
+        <button className={`${btn.outline} ${btnSm} flex-1`} onClick={exportCsv}>
+          <DownloadIcon className="size-3.5" />
           Export all (CSV)
         </button>
       </div>
 
       {staleClientIds.length > 0 && (
-        <div className="banner warn">
-          <div>
-            <strong>Unbilled hours from before this month</strong>
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-border bg-warning-bg p-4 text-sm leading-normal text-warning-fg">
+          <AlertIcon className="mt-0.5 size-4 shrink-0" />
+          <div className="flex-1">
+            <strong className="mb-0.5 block">Unbilled hours from before this month</strong>
             {staleClientIds.map((id) => clientName(id)).join(', ')} — might be time to
             invoice.
           </div>
           <button
-            className="btn btn-sm"
+            className={`${btn.outline} ${btnSm} shrink-0 bg-card`}
             onClick={() => openSheet({ kind: 'newInvoice', clientId: staleClientIds[0] })}
           >
             Invoice
@@ -103,7 +116,7 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
 
       {data.invoices.length === 0 ? (
         <EmptyState
-          glyph="▤"
+          icon={<InvoiceIcon className="size-8" />}
           lines={['No invoices yet.', 'Bill your logged hours in one tap.']}
         />
       ) : (
@@ -112,23 +125,32 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
           return (
             <button
               key={inv.id}
-              className={`invoice-card status-${status}`}
+              className={
+                'relative mb-3 block w-full cursor-pointer overflow-hidden rounded-2xl border border-border bg-card p-4 text-left shadow-xs before:absolute before:inset-y-0 before:left-0 before:w-1.5 before:content-[""] ' +
+                (status === 'paid'
+                  ? 'before:bg-secondary'
+                  : status === 'overdue'
+                    ? 'before:bg-destructive'
+                    : 'before:bg-accent')
+              }
               onClick={() => openSheet({ kind: 'viewInvoice', id: inv.id })}
             >
-              <div className="inv-top">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="inv-num">#{inv.number}</div>
-                  <div className="inv-client">{clientName(inv.clientId)}</div>
+                  <div className="font-mono text-xs tracking-wide text-muted-fg">#{inv.number}</div>
+                  <div className="mt-0.5 text-base font-semibold">{clientName(inv.clientId)}</div>
                 </div>
-                <div className="inv-total">{fmtMoney(inv.total)}</div>
+                <div className="whitespace-nowrap text-right font-mono text-lg font-semibold">
+                  {fmtMoney(inv.total)}
+                </div>
               </div>
-              <div className="inv-dates">
+              <div className="mt-1.5 text-xs text-muted-fg">
                 Issued {fmtDMY(inv.issueDate)} · Due {fmtDMY(inv.dueDate)}
               </div>
-              <div className="inv-card-foot">
-                <span className={'badge ' + STATUS_BADGE[status]}>{status}</span>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <span className={badge[STATUS_BADGE[status]]}>{status}</span>
                 <span
-                  className="btn btn-outline btn-xs"
+                  className={`${btn.outline} ${btnXs}`}
                   role="button"
                   tabIndex={0}
                   onClick={(e) => {
@@ -142,7 +164,8 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
                     }
                   }}
                 >
-                  Hours ▤
+                  <ListIcon className="size-3" />
+                  Hours
                 </span>
               </div>
             </button>

@@ -1,8 +1,10 @@
+import { PlusIcon } from '../components/icons';
 import { Sheet } from '../components/ui';
 import { fmtDateLabel, fmtHours, hoursBetween } from '../lib/format';
 import type { OpenSheet } from '../lib/sheets';
 import { useStore } from '../store/context';
 import { PunchRow } from '../views/TrackView';
+import { btn, btnBlock, emptyInline, hint } from '../styles/cx';
 
 export function DayDetailSheet({
   date,
@@ -35,13 +37,13 @@ export function DayDetailSheet({
   return (
     <Sheet title={fmtDateLabel(date)} onClose={onClose}>
       {sessions.length > 0 && (
-        <div className="hint" style={{ marginBottom: 12 }}>
+        <div className={`${hint} mb-3`}>
           {fmtHours(total)} total
         </div>
       )}
 
       {sessions.length === 0 ? (
-        <div className="empty-inline">No entries this day.</div>
+        <div className={emptyInline}>No entries this day.</div>
       ) : (
         sessions.map((s) => (
           <PunchRow
@@ -55,8 +57,7 @@ export function DayDetailSheet({
       )}
 
       <button
-        className="btn btn-outline btn-block"
-        style={{ marginTop: 12 }}
+        className={`${btn.outline} ${btnBlock}`}
         onClick={() => {
           if (data.clients.length === 0) {
             toast('Add a client first');
@@ -65,7 +66,8 @@ export function DayDetailSheet({
           replaceSheet({ kind: 'entry', prefill: { date } });
         }}
       >
-        + Add entry for this day
+        <PlusIcon className="size-3.5" />
+        Add entry for this day
       </button>
     </Sheet>
   );
