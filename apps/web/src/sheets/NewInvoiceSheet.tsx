@@ -1,0 +1,186 @@
+import { useMemo, useState } from 'react';
+import { Field, Sheet } from '../components/ui';
+import {
+  addDaysIso,
+  fmtDateLabel,
+  fmtMoney,
+  hoursBetween,
+  todayIso,
+} from '../lib/format';
+import { nextInvoiceNumber } from '../lib/invoice';
+import { uid } from '../lib/storage';
+import { useStore } from '../store/context';
+
+export function NewInvoiceSheet({
+  clientId: initialClientId,
+  onClose,
+}: {
+  clientId?: string;
+  onClose: () => void;
+}) {
+  const { data, update, toast } = useStore();
+  const [clientId, setClientId] = useState(
+    initialClientId ?? data.clients[0]?.id ?? '',
+  );
+  const [description, setDescription] = useState(data.profile.defaultDesc || '');
+  const [issueDate, setIssueDate] = useState(todayIso());
+  const [dueDate, setDueDate] = useState(addDaysIso(todayIso(), 14));
+
+  const candidates = useMemo(
+    () =>
+      data.sessions
+        .filter((s) => s.clientId === clientId && !s.invoiced)
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    [data.sessions, clientId],
+  );
+
+  const [unchecked, setUnchecked] = useState<string[]>([]);
+  const checkedIds = candidates.filter((s) => !unchecked.includes(s.id)).map((s) => s.id);
+  const rate = data.clients.find((c) => c.id === clientId)?.rate ?? 0;
+
+  const toggle = (id: string) =>
+    setUnchecked((u) => (u.includes(id) ? u.filter((x) => x !== id) : [...u, id]));
+
+  const generate = () => {
+    if (checkedIds.length === 0) return;
+    const client = data.clients.find((c) => c.id === clientId);
+    if (!client) return;
+
+    const records = checkedIds.map((id) => {
+      const s = data.sessions.find((x) => x.id === id);
+      return { date: s?.date ?? '', hours: s ? hoursBetween(s.start, s.end) : 0 };
+    });
+    const totalHours = records.reduce((sum, r) => sum + r.hours, 0);
+    const dates = records.map((r) => r.date).sort();
+    const number = nextInvoiceNumber(
+      data.invoices,
+      data.profile.lastInvoiceNumber,
+      issueDate,
+    );
+    const id = uid('inv');
+
+    update((d) => {
+      d.invoices.push({
+        id,
+        number,
+        clientId,
+        issueDate,
+        dueDate,
+        description: description.trim() || 'Storitve',
+        periodStart: dates[0] ?? issueDate,
+        periodEnd: dates[dates.length - 1] ?? issueDate,
+        sessionIds: checkedIds,
+        totalHours,
+        rate: client.rate,
+        total: totalHours * client.rate,
+        status: 'unpaid',
+        paidDate: null,
+      });
+      checkedIds.forEach((sid) => {
+        const s = d.sessions.find((x) => x.id === sid);
+        if (s) {
+          s.invoiced = true;
+          s.invoiceId = id;
+        }
+      });
+    });
+    toast('Invoice ' + number + ' created');
+    onClose();
+  };
+
+  if (data.clients.length === 0) {
+    return (
+      <Sheet title="New invoice" onClose={onClose}>
+        <p className="hint">Add a client first.</p>
+      </Sheet>
+    );
+  }
+
+  return (
+    <Sheet title="New invoice" onClose={onClose}>
+      <Field label="Client" htmlFor="invClient">
+        <select
+          id="invClient"
+          className="select"
+          value={clientId}
+          onChange={(e) => {
+            setClientId(e.target.value);
+            setUnchecked([]);
+          }}
+        >
+          {data.clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      {candidates.length === 0 ? (
+        <p className="hint" style={{ marginBottom: 16 }}>
+          No unbilled hours logged for this client yet.
+        </p>
+      ) : (
+        <div className="field">
+          <span className="label">Unbilled sessions</span>
+          <div className="checklist">
+            {candidates.map((s) => (
+              <label className="check-row" key={s.id}>
+                <input
+                  type="checkbox"
+                  checked={!unchecked.includes(s.id)}
+                  onChange={() => toggle(s.id)}
+                />
+                <span className="info">
+                  {fmtDateLabel(s.date)} · {s.start}–{s.end}
+                  {s.note ? ' · ' + s.note : ''}
+                </span>
+                <span className="amt">{fmtMoney(hoursBetween(s.start, s.end) * rate)}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Field label="Service description" htmlFor="invDesc">
+        <input
+          id="invDesc"
+          className="input"
+          type="text"
+          placeholder="e.g. Reševanje iz vode"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </Field>
+
+      <div className="row2">
+        <Field label="Issue date" htmlFor="invDate">
+          <input
+            id="invDate"
+            className="input"
+            type="date"
+            value={issueDate}
+            onChange={(e) => setIssueDate(e.target.value)}
+          />
+        </Field>
+        <Field label="Due date" htmlFor="invDue">
+          <input
+            id="invDue"
+            className="input"
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+          />
+        </Field>
+      </div>
+
+      <button
+        className="btn btn-primary btn-block"
+        disabled={checkedIds.length === 0}
+        onClick={generate}
+      >
+        Generate invoice
+      </button>
+    </Sheet>
+  );
+}

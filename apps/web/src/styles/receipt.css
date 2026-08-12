@@ -1,0 +1,441 @@
+/* ---------------------------------------------------------------------------
+ * Invoice document (formal, print-style) — kept as-is from docs/example.html.
+ * Self-contained on purpose: it uses literal print colours rather than the
+ * Soft Pop tokens, so the document looks the same on screen and on paper.
+ * ------------------------------------------------------------------------- */
+.receipt {
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 2px;
+  padding: 0;
+  position: relative;
+  color: #111;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.07),
+    0 10px 28px rgba(0, 0, 0, 0.08);
+}
+
+/* --- Letterhead --- */
+.receipt-band {
+  padding: 24px 26px 18px;
+  border-bottom: 2px solid #111;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.receipt-band .doc-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #777;
+  margin-bottom: 5px;
+}
+.receipt-band h2 {
+  font-family: 'Inter', sans-serif;
+  font-size: 23px;
+  margin: 0;
+  color: #111;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.receipt-band .num-block {
+  text-align: right;
+  flex-shrink: 0;
+}
+.receipt-band .num-block .num-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 9.5px;
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 3px;
+}
+.receipt-band .num-block .num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111;
+}
+
+.receipt-body {
+  padding: 20px 26px 24px;
+}
+
+/* --- Dates --- */
+.receipt-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e2e2;
+}
+.receipt-dates .dd {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.receipt-dates .label {
+  font-family: 'Inter', sans-serif;
+  font-size: 11.5px;
+  color: #666;
+}
+.receipt-dates .val {
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace;
+  color: #111;
+}
+
+/* --- Parties --- */
+.receipt-parties {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+.receipt-parties .party {
+  min-width: 0;
+}
+.receipt-parties .label {
+  font-family: 'Inter', sans-serif;
+  font-size: 9.5px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  margin-bottom: 7px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #d9d9d9;
+  font-weight: 600;
+}
+.receipt-parties .party-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 14.5px;
+  font-weight: 700;
+  margin-bottom: 3px;
+  line-height: 1.35;
+  color: #111;
+}
+.receipt-parties .party-line {
+  font-size: 12px;
+  color: #333;
+  line-height: 1.65;
+}
+.receipt-parties .party-line .k {
+  color: #777;
+}
+
+/* --- Service table --- */
+.receipt-service {
+  border: 1px solid #d9d9d9;
+  border-radius: 2px;
+  padding: 0;
+  margin-bottom: 18px;
+}
+.receipt-service .label {
+  font-family: 'Inter', sans-serif;
+  font-size: 9.5px;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  font-weight: 600;
+  padding: 9px 14px;
+  background: #f4f4f2;
+  border-bottom: 1px solid #d9d9d9;
+}
+.receipt-service .desc {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111;
+  padding: 13px 14px 10px;
+}
+.receipt-service .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  padding: 7px 14px;
+  color: #333;
+  border-top: 1px solid #ececec;
+}
+.receipt-service .row .k {
+  color: #666;
+  flex-shrink: 0;
+}
+.receipt-service .row .v {
+  font-family: 'IBM Plex Mono', monospace;
+  text-align: right;
+  color: #111;
+}
+
+/* --- Total --- */
+.receipt-total-band {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  border-top: 2px solid #111;
+  border-bottom: 2px solid #111;
+  padding: 13px 2px;
+  margin-bottom: 18px;
+}
+.receipt-total-band .label {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #111;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.receipt-total-band .amount {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 21px;
+  font-weight: 700;
+  color: #111;
+}
+
+/* --- VAT clause --- */
+.receipt-vat-clause {
+  font-size: 11.5px;
+  color: #333;
+  line-height: 1.55;
+  margin-bottom: 18px;
+}
+
+/* --- Payment details --- */
+.receipt-pay {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e2e2;
+}
+.receipt-pay .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.receipt-pay .label {
+  font-family: 'Inter', sans-serif;
+  font-size: 11.5px;
+  color: #666;
+}
+.receipt-pay .val {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  color: #111;
+}
+
+/* --- QR --- */
+.receipt-qr {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e2e2;
+}
+.receipt-qr-code {
+  width: 84px;
+  height: 84px;
+  flex-shrink: 0;
+}
+.receipt-qr-code svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.receipt-qr-label {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 3px;
+  color: #111;
+}
+.receipt-qr-txt .hint {
+  margin: 0;
+  font-size: 11px;
+  color: #666;
+  line-height: 1.5;
+}
+
+/* --- Footer --- */
+.receipt-footer-note {
+  margin-top: 18px;
+  padding-top: 13px;
+  border-top: 1px solid #e2e2e2;
+  font-family: 'Inter', sans-serif;
+  font-size: 10.5px;
+  color: #777;
+  line-height: 1.65;
+}
+
+/* --- Status strip: screen only, hidden when printing --- */
+.receipt-status-strip {
+  text-align: center;
+  padding: 9px;
+  font-family: 'Inter', sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+  border-top: 1px solid #d9d9d9;
+}
+.receipt-status-strip.paid {
+  background: #e4eee7;
+  color: #234f38;
+}
+.receipt-status-strip.unpaid {
+  background: #f5ebd8;
+  color: #b9852e;
+}
+.receipt-status-strip.overdue {
+  background: #f3e1dc;
+  color: #a6402c;
+}
+
+/* ---------- Timesheet (working hours) ---------- */
+.ts-doc {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 12px 32px rgba(0, 0, 0, 0.1);
+  padding: 22px 22px 20px;
+}
+.ts-doc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 2px solid var(--fg);
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+}
+.ts-doc-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted-fg);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 6px;
+}
+.ts-doc-title {
+  font-size: 19px;
+  font-weight: 700;
+}
+.ts-doc-ref {
+  text-align: right;
+}
+.ts-doc-ref .k {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--muted-fg);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 3px;
+}
+.ts-doc-ref .v {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.ts-doc-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  margin-bottom: 16px;
+  color: var(--muted-fg);
+}
+.ts-doc-sub .k {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-right: 6px;
+}
+.ts-doc-foot {
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted-fg);
+  text-align: right;
+}
+.ts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ts-table th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted-fg);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 6px;
+  border-bottom: 2px solid var(--border);
+}
+.ts-table td {
+  padding: 9px 6px;
+  border-bottom: 1px solid var(--muted);
+}
+.ts-table tfoot td {
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+  padding-top: 10px;
+}
+
+/* ---------- Print (invoice / timesheet) ---------- */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-doc,
+  .print-doc * {
+    visibility: visible;
+  }
+  .print-doc {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    padding: 0;
+    display: block;
+    overflow: visible;
+  }
+  .print-doc .sheet {
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    max-height: none;
+    max-width: none;
+    width: 100%;
+    padding: 0;
+    overflow: visible;
+  }
+  .print-doc .sheet-handle,
+  .print-doc .sheet-head,
+  .print-doc .no-print {
+    display: none !important;
+  }
+  .receipt-status-strip {
+    display: none !important;
+  }
+  .receipt {
+    box-shadow: none;
+    border: none;
+  }
+  .ts-doc {
+    box-shadow: none;
+    border: none;
+    padding: 0;
+  }
+}
