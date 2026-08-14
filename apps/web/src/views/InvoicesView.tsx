@@ -7,16 +7,14 @@ import {
   PlusIcon,
 } from '../components/icons';
 import { invoiceReadiness } from '@reckon/shared';
-import { InvoiceHistoryRequired } from '../components/InvoiceHistoryRequired';
 import { EmptyState, SectionHead } from '../components/ui';
 import { downloadBlob, toCsv } from '../lib/download';
-import { fmtDMY, fmtMoney, todayIso } from '../lib/format';
+import { fmtDMY, fmtMoney, plural, todayIso } from '../lib/format';
 import {
   STATUS_BADGE,
   STATUS_LABEL,
   invoiceSortKey,
   invoiceStatusComputed,
-  missingInvoiceNumbers,
 } from '../lib/invoice';
 import type { OpenSheet } from '../lib/sheets';
 import { useStore } from '../store/context';
@@ -31,7 +29,9 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
   const monthStart = todayIso().slice(0, 8) + '01';
   const staleClientIds = [
     ...new Set(
-      data.sessions.filter((s) => !s.invoiced && s.date < monthStart).map((s) => s.clientId),
+      data.sessions
+        .filter((s) => !s.invoiced && s.date < monthStart)
+        .map((s) => s.clientId),
     ),
   ];
 
@@ -40,7 +40,9 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
       toast('Ni računov za izvoz');
       return;
     }
-    const sorted = [...data.invoices].sort((a, b) => invoiceSortKey(a) - invoiceSortKey(b));
+    const sorted = [...data.invoices].sort(
+      (a, b) => invoiceSortKey(a) - invoiceSortKey(b),
+    );
     const rows: (string | number)[][] = [
       [
         'Številka',
@@ -77,17 +79,42 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
     toast('Računi izvoženi');
   };
 
-  const sorted = [...data.invoices].sort((a, b) => invoiceSortKey(b) - invoiceSortKey(a));
+  const sorted = [...data.invoices].sort(
+    (a, b) => invoiceSortKey(b) - invoiceSortKey(a),
+  );
   const readiness = invoiceReadiness(data.profile);
-  const missing = missingInvoiceNumbers(data.profile.nextInvoiceNumber, data.invoices);
+
+  // Outstanding money is the one thing worth reading at a glance up here; the
+  // bare total on its own was noise.
+  const open = data.invoices.filter(
+    (inv) => invoiceStatusComputed(inv) !== 'paid',
+  );
+  const headerMeta =
+    data.invoices.length === 0
+      ? undefined
+      : [
+          plural(data.invoices.length, [
+            'račun',
+            'računa',
+            'računi',
+            'računov',
+          ]),
+          open.length > 0
+            ? `${plural(open.length, ['odprt', 'odprta', 'odprti', 'odprtih'])} · ${fmtMoney(
+                open.reduce((sum, inv) => sum + inv.total, 0),
+              )}`
+            : 'vse plačano',
+        ].join(' · ');
 
   return (
     <>
-      <SectionHead title="Računi" count={data.invoices.length}>
+      <SectionHead title="Računi" meta={headerMeta}>
         <button
           className={`${btn.primary} ${btnSm} max-desk:hidden`}
           onClick={() =>
-            openSheet(readiness.ready ? { kind: 'newInvoice' } : { kind: 'profile' })
+            openSheet(
+              readiness.ready ? { kind: 'newInvoice' } : { kind: 'profile' },
+            )
           }
         >
           <PlusIcon className="size-3.5" />
@@ -99,13 +126,18 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
         <button
           className={`${btn.outline} ${btnSm} flex-1`}
           onClick={() =>
-            openSheet(readiness.ready ? { kind: 'importInvoice' } : { kind: 'profile' })
+            openSheet(
+              readiness.ready ? { kind: 'importInvoice' } : { kind: 'profile' },
+            )
           }
         >
           <FilePlusIcon className="size-3.5" />
           Uvozi obstoječi račun
         </button>
-        <button className={`${btn.outline} ${btnSm} flex-1`} onClick={exportCsv}>
+        <button
+          className={`${btn.outline} ${btnSm} flex-1`}
+          onClick={exportCsv}
+        >
           <DownloadIcon className="size-3.5" />
           Izvozi vse (CSV)
         </button>
@@ -115,7 +147,9 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
         <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-border bg-warning-bg p-4 text-sm leading-normal text-warning-fg">
           <AlertIcon className="mt-0.5 size-4 shrink-0" />
           <div className="flex-1">
-            <strong className="mb-0.5 block">Računov še ni mogoče izstaviti</strong>
+            <strong className="mb-0.5 block">
+              Računov še ni mogoče izstaviti
+            </strong>
             Manjka: {readiness.missing.map((m) => m.label).join(', ')}.
           </div>
           <button
@@ -127,23 +161,21 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
         </div>
       )}
 
-      {missing.length > 0 && (
-        <InvoiceHistoryRequired
-          missing={missing}
-          onRecord={(number) => openSheet({ kind: 'importInvoice', prefillNumber: number })}
-        />
-      )}
-
       {staleClientIds.length > 0 && (
         <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-border bg-warning-bg p-4 text-sm leading-normal text-warning-fg">
           <AlertIcon className="mt-0.5 size-4 shrink-0" />
           <div className="flex-1">
-            <strong className="mb-0.5 block">Neobračunane ure iz prejšnjih mesecev</strong>
-            {staleClientIds.map((id) => clientName(id)).join(', ')} — morda je čas za račun.
+            <strong className="mb-0.5 block">
+              Neobračunane ure iz prejšnjih mesecev
+            </strong>
+            {staleClientIds.map((id) => clientName(id)).join(', ')} — morda je
+            čas za račun.
           </div>
           <button
             className={`${btn.outline} ${btnSm} shrink-0 bg-card`}
-            onClick={() => openSheet({ kind: 'newInvoice', clientId: staleClientIds[0] })}
+            onClick={() =>
+              openSheet({ kind: 'newInvoice', clientId: staleClientIds[0] })
+            }
           >
             Izstavi račun
           </button>
@@ -153,7 +185,10 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
       {data.invoices.length === 0 ? (
         <EmptyState
           icon={<InvoiceIcon className="size-8" />}
-          lines={['Ni izstavljenih računov.', 'Zabeležene ure zaračunate z enim klikom.']}
+          lines={[
+            'Ni izstavljenih računov.',
+            'Zabeležene ure zaračunate z enim klikom.',
+          ]}
         />
       ) : (
         sorted.map((inv) => {
@@ -173,8 +208,12 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="font-mono text-xs tracking-wide text-muted-fg">#{inv.number}</div>
-                  <div className="mt-0.5 text-base font-semibold">{clientName(inv.clientId)}</div>
+                  <div className="font-mono text-xs tracking-wide text-muted-fg">
+                    #{inv.number}
+                  </div>
+                  <div className="mt-0.5 text-base font-semibold">
+                    {clientName(inv.clientId)}
+                  </div>
                 </div>
                 <div className="whitespace-nowrap text-right font-mono text-lg font-semibold">
                   {fmtMoney(inv.total)}
@@ -184,7 +223,9 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
                 Izdan {fmtDMY(inv.issueDate)} · Rok {fmtDMY(inv.dueDate)}
               </div>
               <div className="mt-3 flex items-center justify-between gap-2">
-                <span className={badge[STATUS_BADGE[status]]}>{STATUS_LABEL[status]}</span>
+                <span className={badge[STATUS_BADGE[status]]}>
+                  {STATUS_LABEL[status]}
+                </span>
                 <span
                   className={`${btn.outline} ${btnXs}`}
                   role="button"

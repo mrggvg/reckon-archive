@@ -181,3 +181,21 @@ export function clientColor(clientId: string | null | undefined): string {
   }
   return CLIENT_COLORS[hash % CLIENT_COLORS.length] as string;
 }
+
+/**
+ * Slovenian counted nouns: 1 vnos, 2 vnosa, 3 vnosi, 5 vnosov.
+ *
+ * The form follows n mod 100 — dual for 2, "few" for 3 and 4, genitive plural
+ * for everything else — which is why "3 vnosov" reads as broken Slovenian even
+ * though a naive singular/plural switch would produce it.
+ */
+export function plural(
+  n: number,
+  [one, two, few, other]: [string, string, string, string],
+): string {
+  const r = Math.abs(n) % 100;
+  if (r === 1) return `${n} ${one}`;
+  if (r === 2) return `${n} ${two}`;
+  if (r === 3 || r === 4) return `${n} ${few}`;
+  return `${n} ${other}`;
+}

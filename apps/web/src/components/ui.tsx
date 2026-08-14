@@ -214,7 +214,13 @@ export function Field({
   );
 }
 
-export function EmptyState({ icon, lines }: { icon: ReactNode; lines: string[] }) {
+export function EmptyState({
+  icon,
+  lines,
+}: {
+  icon: ReactNode;
+  lines: string[];
+}) {
   return (
     <div className="px-5 py-12 text-center text-muted-fg">
       <div className="mb-3 flex justify-center opacity-35">{icon}</div>
@@ -247,27 +253,42 @@ export function StatCard({
   return (
     <div className={statCard}>
       <div className={statLabel}>{label}</div>
-      <div className={`${statValue} ${tone ? statTone[tone] : ''}`}>{value}</div>
+      <div className={`${statValue} ${tone ? statTone[tone] : ''}`}>
+        {value}
+      </div>
       {change ? <div className={statChange}>{change}</div> : null}
     </div>
   );
 }
 
+/**
+ * Page header: title, an optional line of context under it, and actions.
+ *
+ * The context line sits with the title rather than floating mid-row, and the
+ * views leave it out when there is nothing to count — an empty screen already
+ * says so in its own words, and a lone "0" under the heading only repeats it.
+ */
 export function SectionHead({
   title,
-  count,
+  meta,
   children,
 }: {
   title: string;
-  count?: ReactNode;
+  meta?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <div className="mb-4 flex items-center justify-between gap-3 desk:mb-5">
-      <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-      {count !== undefined ? (
-        <span className="font-mono text-xs text-muted-fg">{count}</span>
-      ) : null}
+      <div className="min-w-0">
+        <h1 className="text-2xl leading-tight font-bold tracking-tight">
+          {title}
+        </h1>
+        {meta !== undefined ? (
+          <div className="mt-0.5 truncate font-mono text-2xs uppercase tracking-wider text-muted-fg">
+            {meta}
+          </div>
+        ) : null}
+      </div>
       {children}
     </div>
   );

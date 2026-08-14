@@ -14,17 +14,14 @@ export function ImportInvoiceSheet({
   onClose,
   openSheet,
   replaceSheet,
-  prefillNumber,
 }: {
   onClose: () => void;
   openSheet?: OpenSheet;
   replaceSheet?: OpenSheet;
-  /** Pre-set when recording a specific gap in the numbering. */
-  prefillNumber?: string;
 }) {
   const { data, update, toast } = useStore();
   const [clientId, setClientId] = useState(data.clients[0]?.id ?? '');
-  const [number, setNumber] = useState(prefillNumber ?? '');
+  const [number, setNumber] = useState('');
   const [total, setTotal] = useState('');
   const [description, setDescription] = useState(data.profile.defaultDesc || '');
   const [periodStart, setPeriodStart] = useState('');

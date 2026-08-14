@@ -43,7 +43,7 @@ export function ProfileRequired({
 
       <button className={`${btn.primary} ${btnBlock}`} onClick={onOpenProfile}>
         <UserIcon className="size-3.5" />
-        Odpri moje podatke
+        Odpri profil
       </button>
     </>
   );

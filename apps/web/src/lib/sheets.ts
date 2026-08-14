@@ -13,7 +13,7 @@ export type SheetState =
   | { kind: 'dayDetail'; date: string }
   | { kind: 'client'; editing?: Client; onCreated?: (id: string) => void }
   | { kind: 'newInvoice'; clientId?: string }
-  | { kind: 'importInvoice'; prefillNumber?: string }
+  | { kind: 'importInvoice' }
   | { kind: 'viewInvoice'; id: string }
   | { kind: 'editInvoice'; id: string }
   | { kind: 'timesheet'; id: string }

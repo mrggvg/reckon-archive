@@ -1,6 +1,12 @@
-import { ClientsIcon, EditIcon, PlusIcon, TrashIcon } from '../components/icons';
+import {
+  ClientsIcon,
+  EditIcon,
+  PlusIcon,
+  TrashIcon,
+} from '../components/icons';
 import { formatAddress } from '@reckon/shared';
 import { EmptyState, SectionHead } from '../components/ui';
+import { plural } from '../lib/format';
 import { btn, btnSm, iconBtn, rowActions } from '../styles/cx';
 import { fmtMoney } from '../lib/format';
 import type { OpenSheet } from '../lib/sheets';
@@ -11,7 +17,9 @@ export function ClientsView({ openSheet }: { openSheet: OpenSheet }) {
 
   const remove = (id: string) => {
     if (
-      !confirm('Izbrišem to stranko? Zabeležene ure ostanejo, a bodo brez stranke.')
+      !confirm(
+        'Izbrišem to stranko? Zabeležene ure ostanejo, a bodo brez stranke.',
+      )
     ) {
       return;
     }
@@ -23,7 +31,19 @@ export function ClientsView({ openSheet }: { openSheet: OpenSheet }) {
 
   return (
     <>
-      <SectionHead title="Stranke" count={data.clients.length}>
+      <SectionHead
+        title="Stranke"
+        meta={
+          data.clients.length > 0
+            ? plural(data.clients.length, [
+                'stranka',
+                'stranki',
+                'stranke',
+                'strank',
+              ])
+            : undefined
+        }
+      >
         <button
           className={`${btn.primary} ${btnSm} max-desk:hidden`}
           onClick={() => openSheet({ kind: 'client' })}
@@ -36,7 +56,10 @@ export function ClientsView({ openSheet }: { openSheet: OpenSheet }) {
       {data.clients.length === 0 ? (
         <EmptyState
           icon={<ClientsIcon className="size-8" />}
-          lines={['Ni vnesenih strank.', 'Dodajte podjetje, za katerega opravljate storitve.']}
+          lines={[
+            'Ni vnesenih strank.',
+            'Dodajte podjetje, za katerega opravljate storitve.',
+          ]}
         />
       ) : (
         data.clients.map((c) => (
@@ -54,7 +77,9 @@ export function ClientsView({ openSheet }: { openSheet: OpenSheet }) {
                 {c.email ? ' · ' + c.email : ''}
                 {c.phone ? ' · ' + c.phone : ''}
               </div>
-              <div className="mt-2 font-mono text-sm font-semibold text-primary">{fmtMoney(c.rate)}/h</div>
+              <div className="mt-2 font-mono text-sm font-semibold text-primary">
+                {fmtMoney(c.rate)}/h
+              </div>
             </div>
             <div className={rowActions}>
               <button

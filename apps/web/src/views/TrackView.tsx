@@ -14,6 +14,7 @@ import {
   fmtDateLabel,
   fmtHours,
   hoursBetween,
+  plural,
   todayIso,
 } from '../lib/format';
 import type { OpenSheet } from '../lib/sheets';
@@ -34,7 +35,9 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
 
   // The filtered-on client may have been deleted since — fall back to All.
   const activeFilter =
-    filter !== 'all' && !data.clients.some((c) => c.id === filter) ? 'all' : filter;
+    filter !== 'all' && !data.clients.some((c) => c.id === filter)
+      ? 'all'
+      : filter;
 
   const visible = useMemo(
     () =>
@@ -44,7 +47,10 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
     [data.sessions, activeFilter],
   );
 
-  const totalHours = visible.reduce((sum, s) => sum + hoursBetween(s.start, s.end), 0);
+  const totalHours = visible.reduce(
+    (sum, s) => sum + hoursBetween(s.start, s.end),
+    0,
+  );
   const unbilledHours = visible
     .filter((s) => !s.invoiced)
     .reduce((sum, s) => sum + hoursBetween(s.start, s.end), 0);
@@ -112,7 +118,11 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
     <>
       <SectionHead
         title="Ure"
-        count={`${visible.length} ${visible.length === 1 ? 'vnos' : 'vnosov'}`}
+        meta={
+          visible.length > 0
+            ? plural(visible.length, ['vnos', 'vnosa', 'vnosi', 'vnosov'])
+            : undefined
+        }
       >
         <button
           className={`${btn.primary} ${btnSm} max-desk:hidden`}
@@ -133,11 +143,17 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
       )}
 
       <div className="mb-3 flex gap-0.5 rounded-lg bg-muted p-1">
-        <button className={tabSeg(view === 'list')} onClick={() => setView('list')}>
+        <button
+          className={tabSeg(view === 'list')}
+          onClick={() => setView('list')}
+        >
           <ListIcon className="size-3.5" />
           Seznam
         </button>
-        <button className={tabSeg(view === 'calendar')} onClick={() => setView('calendar')}>
+        <button
+          className={tabSeg(view === 'calendar')}
+          onClick={() => setView('calendar')}
+        >
           <CalendarIcon className="size-3.5" />
           Koledar
         </button>
@@ -146,7 +162,10 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
       {view === 'list' ? (
         <>
           <div className="mb-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-            <button className={chip(activeFilter === 'all')} onClick={() => setFilter('all')}>
+            <button
+              className={chip(activeFilter === 'all')}
+              onClick={() => setFilter('all')}
+            >
               Vse
             </button>
             {data.clients.map((c) => (
@@ -256,7 +275,11 @@ export function PunchRow({
           {billing ? (
             <>
               {' · '}
-              <span className={billing === 'paid' ? 'font-semibold text-secondary' : ''}>
+              <span
+                className={
+                  billing === 'paid' ? 'font-semibold text-secondary' : ''
+                }
+              >
                 {BILLING_LABEL[billing]}
               </span>
             </>
@@ -269,10 +292,18 @@ export function PunchRow({
         {session.end}
       </div>
       <div className={rowActions}>
-        <button className={`${iconBtn} size-7`} onClick={onEdit} aria-label="Uredi vnos">
+        <button
+          className={`${iconBtn} size-7`}
+          onClick={onEdit}
+          aria-label="Uredi vnos"
+        >
           <EditIcon className="size-3.5" />
         </button>
-        <button className={`${iconBtn} size-7`} onClick={onDelete} aria-label="Izbriši vnos">
+        <button
+          className={`${iconBtn} size-7`}
+          onClick={onDelete}
+          aria-label="Izbriši vnos"
+        >
           <TrashIcon className="size-3.5" />
         </button>
       </div>
