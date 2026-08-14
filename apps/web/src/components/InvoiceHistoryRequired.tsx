@@ -2,12 +2,9 @@ import { AlertIcon, FilePlusIcon } from './icons';
 import { btn, btnBlock, hint } from '../styles/cx';
 
 /**
- * Shown in place of figures that would be wrong.
- *
  * Invoice numbers run unbroken from 001 each year. If the next one is 003/2026
- * then 001 and 002 exist somewhere, and every total here — income, tax owed,
- * what's outstanding — is missing them. Better to say so than to quietly report
- * a smaller year than you had.
+ * then 001 and 002 were issued elsewhere, and this ledger has a hole in it.
+ * Recording them keeps the numbering honest and the history complete.
  */
 export function InvoiceHistoryRequired({
   missing,
@@ -21,7 +18,7 @@ export function InvoiceHistoryRequired({
       <div className="mb-3 flex items-start gap-3 rounded-2xl border border-border bg-warning-bg p-4 text-sm leading-normal text-warning-fg">
         <AlertIcon className="mt-0.5 size-4 shrink-0" />
         <div>
-          <strong className="mb-0.5 block">Pregled še ni popoln</strong>
+          <strong className="mb-0.5 block">Zaporedje računov ni popolno</strong>
           {missing.length === 1
             ? 'En račun je bil izdan izven aplikacije in še ni zabeležen.'
             : `${missing.length} računov je bilo izdanih izven aplikacije in še niso zabeleženi.`}
@@ -42,8 +39,8 @@ export function InvoiceHistoryRequired({
       </div>
 
       <p className={`${hint} mb-3`}>
-        Zaporedje številk se začne pri 001 vsako leto. Dokler manjkajo, bi bili
-        prihodki, dajatve in odprte terjatve prenizko prikazani.
+        Številke se začnejo pri 001 vsako leto. Zabeležite manjkajoče, da bo zgodovina
+        računov popolna.
       </p>
 
       <button className={`${btn.primary} ${btnBlock}`} onClick={() => onRecord(missing[0]!)}>

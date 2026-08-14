@@ -7,6 +7,7 @@ import {
   PlusIcon,
 } from '../components/icons';
 import { invoiceReadiness } from '@reckon/shared';
+import { InvoiceHistoryRequired } from '../components/InvoiceHistoryRequired';
 import { EmptyState, SectionHead } from '../components/ui';
 import { downloadBlob, toCsv } from '../lib/download';
 import { fmtDMY, fmtMoney, todayIso } from '../lib/format';
@@ -15,6 +16,7 @@ import {
   STATUS_LABEL,
   invoiceSortKey,
   invoiceStatusComputed,
+  missingInvoiceNumbers,
 } from '../lib/invoice';
 import type { OpenSheet } from '../lib/sheets';
 import { useStore } from '../store/context';
@@ -77,6 +79,7 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
 
   const sorted = [...data.invoices].sort((a, b) => invoiceSortKey(b) - invoiceSortKey(a));
   const readiness = invoiceReadiness(data.profile);
+  const missing = missingInvoiceNumbers(data.profile.nextInvoiceNumber, data.invoices);
 
   return (
     <>
@@ -122,6 +125,13 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
             Dopolni
           </button>
         </div>
+      )}
+
+      {missing.length > 0 && (
+        <InvoiceHistoryRequired
+          missing={missing}
+          onRecord={(number) => openSheet({ kind: 'importInvoice', prefillNumber: number })}
+        />
       )}
 
       {staleClientIds.length > 0 && (

@@ -9,6 +9,9 @@
 --   * Day-granularity fields are `date`; instants are `timestamptz`.
 --   * Every user-owned table carries user_id, so every query scopes with one
 --     predicate and a stray join can't leak across accounts.
+--
+-- Scope is deliberately narrow: hours, clients, invoices, and who is issuing
+-- them. Nothing here forecasts tax.
 
 drop schema if exists public cascade;
 create schema public;
@@ -43,16 +46,12 @@ create table profiles (
                                check (reg_number = '' or reg_number ~ '^[0-9]{7}([0-9]{3})?$'),
   iban                       text not null default ''
                                check (iban = '' or iban ~ '^SI56[0-9]{15}$'),
-  -- Share of paid income set aside for akontacija dohodnine.
-  tax_rate_percent           numeric(5, 2) not null default 4
-                               check (tax_rate_percent >= 0 and tax_rate_percent <= 100),
   vat_payer                  boolean not null default false,
-  tax_system                 text not null default 'normiranec'
-                               check (tax_system in ('normiranec', 'dejanski')),
-  monthly_contribution_cents integer not null default 0
-                               check (monthly_contribution_cents >= 0),
+  -- Name on the account when it isn't the issuer's; goes in the UPN QR.
+  account_holder             text not null default '',
   default_description        text not null default '',
-  last_invoice_number        text not null default '',
+  -- The number the next invoice will carry, e.g. 003/2026.
+  next_invoice_number        text not null default '',
   place_of_issue             text not null default '',
   vat_clause                 text not null default '',
   updated_at                 timestamptz not null default now()
@@ -162,31 +161,6 @@ create index work_sessions_unbilled_idx on work_sessions (user_id, client_id)
   where invoice_id is null;
 create index work_sessions_invoice_idx on work_sessions (invoice_id)
   where invoice_id is not null;
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Tax ledger
--- ─────────────────────────────────────────────────────────────────────────────
-
-create table tax_payments (
-  id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references users (id) on delete cascade,
-  kind         text not null check (kind in ('dohodnina', 'prispevki', 'drugo')),
-  paid_on      date not null,
-  amount_cents integer not null check (amount_cents > 0),
-  note         text not null default '',
-  created_at   timestamptz not null default now()
-);
-
-create index tax_payments_user_date_idx on tax_payments (user_id, paid_on desc);
-
--- One assessed dohodnina figure per year, from the FURS odločba.
-create table tax_assessments (
-  user_id      uuid not null references users (id) on delete cascade,
-  year         integer not null check (year between 2000 and 2100),
-  amount_cents integer not null check (amount_cents >= 0),
-  updated_at   timestamptz not null default now(),
-  primary key (user_id, year)
-);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Login sessions (connect-pg-simple)

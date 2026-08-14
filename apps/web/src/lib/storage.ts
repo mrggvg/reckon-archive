@@ -21,10 +21,7 @@ export const emptyProfile: Profile = {
   regNumber: '',
   iban: '',
   accountHolder: '',
-  taxRate: 4,
   vatPayer: 'NE',
-  taxSystem: 'normiranec',
-  monthlyContribution: 0,
   defaultDesc: '',
   nextInvoiceNumber: '',
   placeOfIssue: '',
@@ -34,12 +31,9 @@ export const emptyProfile: Profile = {
 export function emptyData(): AppData {
   return {
     profile: { ...emptyProfile },
-    businesses: [],
     clients: [],
     sessions: [],
     invoices: [],
-    taxPayments: [],
-    taxAssessments: [],
   };
 }
 
@@ -50,12 +44,9 @@ export function normalize(raw: unknown): AppData {
   const d = raw as Partial<AppData>;
   return {
     profile: migrateProfile({ ...base.profile, ...(d.profile ?? {}) }),
-    businesses: d.businesses ?? [],
     clients: (d.clients ?? []).map(migrateClient),
     sessions: d.sessions ?? [],
     invoices: d.invoices ?? [],
-    taxPayments: d.taxPayments ?? [],
-    taxAssessments: d.taxAssessments ?? [],
   };
 }
 

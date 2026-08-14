@@ -1,5 +1,3 @@
-import type { Business } from '@reckon/shared';
-
 export interface Profile {
   name: string;
   /** Address kept in parts; joined with formatAddress() for printing. */
@@ -11,10 +9,7 @@ export interface Profile {
   iban: string;
   /** Name on the account, when it isn't the same as the issuer's. */
   accountHolder: string;
-  taxRate: number;
   vatPayer: 'DA' | 'NE';
-  taxSystem: 'normiranec' | 'dejanski';
-  monthlyContribution: number;
   defaultDesc: string;
   /** The number the next invoice will carry, e.g. 003/2026. */
   nextInvoiceNumber: string;
@@ -66,31 +61,11 @@ export interface Invoice {
   imported?: boolean;
 }
 
-export type TaxPaymentType = 'dohodnina' | 'prispevki' | 'drugo';
-
-export interface TaxPayment {
-  id: string;
-  type: TaxPaymentType;
-  date: string;
-  amount: number;
-  note: string;
-}
-
-export interface TaxAssessment {
-  id: string;
-  year: number;
-  amount: number;
-}
-
 export interface AppData {
   profile: Profile;
-  /** Registration periods, oldest first. The last open one is the active s.p. */
-  businesses: Business[];
   clients: Client[];
   sessions: Session[];
   invoices: Invoice[];
-  taxPayments: TaxPayment[];
-  taxAssessments: TaxAssessment[];
 }
 
-export type TabName = 'track' | 'clients' | 'invoices' | 'overview' | 'tax';
+export type TabName = 'track' | 'clients' | 'invoices';

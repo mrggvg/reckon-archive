@@ -85,17 +85,9 @@ export const profileSchema = z
       // Defaulted, so a profile saved before this field existed still parses.
       .default(''),
 
-    taxRate: z
-      .number({ message: 'Vnesite odstotek' })
-      .min(0, 'Ne more biti negativno')
-      .max(100, 'Ne more presegati 100 %'),
 
     vatPayer: z.enum(['DA', 'NE']),
-    taxSystem: z.enum(['normiranec', 'dejanski']),
 
-    monthlyContribution: z
-      .number({ message: 'Vnesite znesek' })
-      .min(0, 'Ne more biti negativno'),
 
     defaultDesc: z.string().trim(),
     nextInvoiceNumber: invoiceNumberSchema,

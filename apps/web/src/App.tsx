@@ -1,12 +1,10 @@
 import { useCallback, useState } from 'react';
 import {
-  ChartIcon,
   ClientsIcon,
   ClockIcon,
   InvoiceIcon,
   PlusIcon,
   SignOutIcon,
-  TaxIcon,
   UserIcon,
 } from './components/icons';
 import { useAuth } from './auth/context';
@@ -16,9 +14,7 @@ import { EditInvoiceSheet } from './sheets/EditInvoiceSheet';
 import { EntrySheet } from './sheets/EntrySheet';
 import { ImportInvoiceSheet } from './sheets/ImportInvoiceSheet';
 import { NewInvoiceSheet } from './sheets/NewInvoiceSheet';
-import { BusinessSheet } from './sheets/BusinessSheet';
 import { ProfileSheet } from './sheets/ProfileSheet';
-import { TaxPaymentSheet } from './sheets/TaxPaymentSheet';
 import { TimesheetSheet } from './sheets/TimesheetSheet';
 import { ViewInvoiceSheet } from './sheets/ViewInvoiceSheet';
 import { iconBtn } from './styles/cx';
@@ -36,8 +32,6 @@ import type { SheetState } from './lib/sheets';
 import type { TabName } from './lib/types';
 import { ClientsView } from './views/ClientsView';
 import { InvoicesView } from './views/InvoicesView';
-import { OverviewView } from './views/OverviewView';
-import { TaxView } from './views/TaxView';
 import { TrackView } from './views/TrackView';
 
 const TABS: {
@@ -48,7 +42,6 @@ const TABS: {
   { name: 'track', label: 'Ure', icon: ClockIcon },
   { name: 'clients', label: 'Stranke', icon: ClientsIcon },
   { name: 'invoices', label: 'Računi', icon: InvoiceIcon },
-  { name: 'overview', label: 'Pregled', icon: ChartIcon },
 ];
 
 export default function App() {
@@ -81,7 +74,6 @@ export default function App() {
     if (tab === 'track') openSheet({ kind: 'entry' });
     else if (tab === 'clients') openSheet({ kind: 'client' });
     else if (tab === 'invoices') openSheet({ kind: 'newInvoice' });
-    else if (tab === 'tax') openSheet({ kind: 'taxPayment' });
   };
 
   const profileTag = data.profile.name || 'uredi podatke →';
@@ -109,14 +101,6 @@ export default function App() {
             </button>
           );
         })}
-        <button
-          className={navItem(tab === 'tax')}
-          onClick={() => goTab('tax')}
-        >
-          <TaxIcon />
-          Davki
-        </button>
-
         <div className="mt-auto">
           <button className={navItem(false)} onClick={() => openSheet({ kind: 'profile' })}>
             <UserIcon />
@@ -157,15 +141,13 @@ export default function App() {
             {tab === 'track' && <TrackView openSheet={openSheet} />}
             {tab === 'clients' && <ClientsView openSheet={openSheet} />}
             {tab === 'invoices' && <InvoicesView openSheet={openSheet} />}
-            {tab === 'overview' && <OverviewView openSheet={openSheet} goTab={goTab} />}
-            {tab === 'tax' && <TaxView openSheet={openSheet} goTab={goTab} />}
-          </div>
+              </div>
         </main>
 
         <nav className="flex shrink-0 gap-1 border-t border-border bg-card px-2.5 pt-2 pb-[calc(--spacing(2)+env(safe-area-inset-bottom))] desk:hidden">
           {TABS.map((t) => {
             const Icon = t.icon;
-            const active = tab === t.name || (t.name === 'overview' && tab === 'tax');
+            const active = tab === t.name;
             return (
               <button
                 key={t.name}
@@ -180,7 +162,7 @@ export default function App() {
         </nav>
       </div>
 
-      {tab !== 'overview' && (
+      {(
         <button
           className="fixed right-4 bottom-[calc(--spacing(21)+env(safe-area-inset-bottom))] z-15 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full border border-border bg-primary text-primary-fg shadow-lg active:scale-95 desk:hidden"
           onClick={handleFab}
@@ -226,14 +208,7 @@ export default function App() {
       )}
       {top?.kind === 'editInvoice' && <EditInvoiceSheet id={top.id} onClose={closeSheet} />}
       {top?.kind === 'timesheet' && <TimesheetSheet id={top.id} onClose={closeSheet} />}
-      {top?.kind === 'taxPayment' && <TaxPaymentSheet onClose={closeSheet} />}
-      {top?.kind === 'profile' && (
-        <ProfileSheet onClose={closeSheet} openSheet={openSheet} />
-      )}
-      {top?.kind === 'business' && (
-        <BusinessSheet editing={top.editing} onClose={closeSheet} />
-      )}
-
+      {top?.kind === 'profile' && <ProfileSheet onClose={closeSheet} />}
       <Toast panelOpen={stack.length > 0} />
     </div>
   );

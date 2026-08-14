@@ -9,8 +9,7 @@ insert into users (id, email, password_hash) values
 
 insert into profiles (
   user_id, full_name, street, postal_code, city, tax_number, iban,
-  tax_rate_percent, vat_payer, monthly_contribution_cents,
-  default_description, place_of_issue, vat_clause
+  vat_payer, default_description, place_of_issue, vat_clause
 ) values (
   '11111111-1111-1111-1111-111111111111',
   'Dev Uporabnik s.p.',
@@ -19,9 +18,7 @@ insert into profiles (
   'Koper',
   '82426490',
   'SI56101000058079036',
-  4,
   false,
-  65100,
   'Reševanje iz vode',
   'Koper',
   'Nisem zavezanec za DDV po 1. odstavku 94. člena ZDDV-1.'
@@ -74,10 +71,3 @@ insert into work_sessions (user_id, client_id, work_date, start_time, end_time, 
   ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222',
    '2026-08-11', '22:00', '02:00', 'Nočna izmena');
 
-insert into tax_payments (user_id, kind, paid_on, amount_cents, note) values
-  ('11111111-1111-1111-1111-111111111111', 'prispevki', '2026-06-15', 65100, 'Maj'),
-  ('11111111-1111-1111-1111-111111111111', 'prispevki', '2026-07-15', 65100, 'Junij'),
-  ('11111111-1111-1111-1111-111111111111', 'dohodnina', '2026-07-15', 1800, 'Akontacija Q2');
-
-insert into tax_assessments (user_id, year, amount_cents) values
-  ('11111111-1111-1111-1111-111111111111', 2025, 42000);

@@ -1,44 +1,30 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { POSTAL_CODE_LENGTH, TAX_NUMBER_LENGTH, fieldErrors, profileSchema } from '@reckon/shared';
 import { useAuth } from '../auth/context';
+import { DownloadIcon, UploadIcon } from '../components/icons';
 import { Select } from '../components/Select';
 import { Field, Sheet } from '../components/ui';
-import { DEFAULT_VAT_CLAUSE } from '../lib/storage';
+import { downloadBlob } from '../lib/download';
+import { todayIso } from '../lib/format';
+import { DEFAULT_VAT_CLAUSE, normalize } from '../lib/storage';
 import type { Profile } from '../lib/types';
-import type { OpenSheet } from '../lib/sheets';
-import { activeBusiness } from '../lib/business';
-import { fmtDMY } from '../lib/format';
 import { useStore } from '../store/context';
-import { btn, btnBlock, btnSm, cardLabel, hint, input } from '../styles/cx';
+import { btn, btnBlock, btnSm, cardLabel, hint, input, row2 } from '../styles/cx';
 
 const digitsOnly = (value: string, max: number) => value.replace(/\D/g, '').slice(0, max);
 
-/** Numbers live in the form as strings so a half-typed value isn't destroyed. */
-type Draft = Omit<Profile, 'taxRate' | 'monthlyContribution'> & {
-  taxRate: string;
-  monthlyContribution: string;
-};
-
-export function ProfileSheet({
-  onClose,
-  openSheet,
-}: {
-  onClose: () => void;
-  openSheet?: OpenSheet;
-}) {
-  const { data, update, toast } = useStore();
+export function ProfileSheet({ onClose }: { onClose: () => void }) {
+  const { data, update, replace, toast } = useStore();
   const { user, signOut } = useAuth();
-  const p = data.profile;
+  const fileInput = useRef<HTMLInputElement>(null);
 
-  const [form, setForm] = useState<Draft>({
-    ...p,
-    vatClause: p.vatClause || DEFAULT_VAT_CLAUSE,
-    taxRate: String(p.taxRate ?? ''),
-    monthlyContribution: String(p.monthlyContribution ?? ''),
+  const [form, setForm] = useState<Profile>({
+    ...data.profile,
+    vatClause: data.profile.vatClause || DEFAULT_VAT_CLAUSE,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
+  const set = <K extends keyof Profile>(key: K, value: Profile[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
     setErrors((e) =>
       key in e ? Object.fromEntries(Object.entries(e).filter(([k]) => k !== key)) : e,
@@ -46,11 +32,7 @@ export function ProfileSheet({
   };
 
   const save = () => {
-    const parsed = profileSchema.safeParse({
-      ...form,
-      taxRate: parseFloat(form.taxRate),
-      monthlyContribution: parseFloat(form.monthlyContribution),
-    });
+    const parsed = profileSchema.safeParse(form);
     if (!parsed.success) {
       setErrors(fieldErrors(parsed.error));
       toast('Preverite označena polja');
@@ -63,8 +45,39 @@ export function ProfileSheet({
     onClose();
   };
 
-  const cls = (key: keyof Draft) => input + (errors[key] ? ' border-destructive' : '');
-  const invalid = (key: keyof Draft) => (errors[key] ? true : undefined);
+  const downloadBackup = () => {
+    downloadBlob(
+      JSON.stringify(data, null, 2),
+      `reckon-varnostna-kopija-${todayIso()}.json`,
+      'application/json',
+    );
+    toast('Varnostna kopija prenesena');
+  };
+
+  const restoreBackup = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed: unknown = JSON.parse(String(reader.result));
+        if (!parsed || typeof parsed !== 'object') throw new Error('bad format');
+        if (!confirm('To bo zamenjalo vse trenutne podatke z vsebino varnostne kopije. Nadaljujem?')) {
+          return;
+        }
+        replace(normalize(parsed));
+        toast('Podatki obnovljeni');
+        onClose();
+      } catch {
+        toast('Datoteke ni bilo mogoče prebrati');
+      }
+      event.target.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const cls = (key: keyof Profile) => input + (errors[key] ? ' border-destructive' : '');
+  const invalid = (key: keyof Profile) => (errors[key] ? true : undefined);
 
   return (
     <Sheet
@@ -139,7 +152,7 @@ export function ProfileSheet({
 
       <div className={cardLabel}>Registracija</div>
 
-      <div className="mb-4 grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
+      <div className={row2}>
         <Field
           label="Davčna številka"
           htmlFor="pTax"
@@ -161,7 +174,8 @@ export function ProfileSheet({
         <Field
           label={
             <>
-              Matična številka <span className="font-normal text-muted-fg">(neobvezno)</span>
+              Matična številka{' '}
+              <span className="font-normal text-muted-fg">(neobvezno)</span>
             </>
           }
           htmlFor="pReg"
@@ -181,77 +195,17 @@ export function ProfileSheet({
         </Field>
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
-        <Field label="Zavezanec za DDV" htmlFor="pVat">
-          <Select
-            id="pVat"
-            value={form.vatPayer}
-            onChange={(v) => set('vatPayer', v as Profile['vatPayer'])}
-            options={[
-              { value: 'NE', label: 'NE — nisem zavezanec' },
-              { value: 'DA', label: 'DA — sem zavezanec' },
-            ]}
-          />
-        </Field>
-        <Field label="Način obdavčitve" htmlFor="pTaxSystem">
-          <Select
-            id="pTaxSystem"
-            value={form.taxSystem}
-            onChange={(v) => set('taxSystem', v as Profile['taxSystem'])}
-            options={[
-              { value: 'normiranec', label: 'Normiranec' },
-              { value: 'dejanski', label: 'Dejanski stroški' },
-            ]}
-          />
-        </Field>
-      </div>
-
-      <div className={cardLabel}>Dejavnost</div>
-
-      {(() => {
-        const business = activeBusiness(data.businesses);
-        if (!business) {
-          return (
-            <div className="mb-4">
-              <div className={hint}>
-                Podatki o vpisu s.p. še niso vneseni. Z njimi se prispevki obračunajo od
-                dneva začetka, dohodnina pa po dejanski stopnji vaše sheme.
-              </div>
-              <button
-                className={`${btn.outline} ${btnSm} mt-2`}
-                onClick={() => openSheet?.({ kind: 'business' })}
-              >
-                Registriraj dejavnost
-              </button>
-            </div>
-          );
-        }
-        return (
-          <div className="mb-4">
-            <div className="text-sm font-semibold">{business.firma}</div>
-            <div className={`${hint} mt-1`}>
-              Vpis {fmtDMY(business.startedOn)}
-              {business.closedOn ? ` · izbris ${fmtDMY(business.closedOn)}` : ' · aktivna'}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                className={`${btn.outline} ${btnSm}`}
-                onClick={() => openSheet?.({ kind: 'business', editing: business })}
-              >
-                Uredi dejavnost
-              </button>
-              {business.closedOn && (
-                <button
-                  className={`${btn.outline} ${btnSm}`}
-                  onClick={() => openSheet?.({ kind: 'business' })}
-                >
-                  Registriraj novo
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })()}
+      <Field label="Zavezanec za DDV" htmlFor="pVat">
+        <Select
+          id="pVat"
+          value={form.vatPayer}
+          onChange={(v) => set('vatPayer', v as Profile['vatPayer'])}
+          options={[
+            { value: 'NE', label: 'NE — nisem zavezanec' },
+            { value: 'DA', label: 'DA — sem zavezanec' },
+          ]}
+        />
+      </Field>
 
       <div className={cardLabel}>Plačilo</div>
 
@@ -275,13 +229,12 @@ export function ProfileSheet({
       <Field
         label={
           <>
-            Imetnik računa{' '}
-            <span className="font-normal text-muted-fg">(neobvezno)</span>
+            Imetnik računa <span className="font-normal text-muted-fg">(neobvezno)</span>
           </>
         }
         htmlFor="pAccountHolder"
         error={errors.accountHolder}
-        hint="Izpolnite, če TRR ni odprt na ime firme — npr. osebni račun. To ime gre v UPN QR kodo."
+        hint="Izpolnite, če TRR ni odprt na ime firme — npr. osebni račun."
       >
         <input
           id="pAccountHolder"
@@ -294,50 +247,6 @@ export function ProfileSheet({
           onChange={(e) => set('accountHolder', e.target.value)}
         />
       </Field>
-
-      <div className={cardLabel}>Rezervacija za dajatve</div>
-
-      <div className="mb-4 grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
-        <Field
-          label="Stopnja dohodnine (%)"
-          htmlFor="pTaxRate"
-          error={errors.taxRate}
-          hint="Za normirance je običajno 4 %."
-        >
-          <input
-            id="pTaxRate"
-            className={cls('taxRate')}
-            type="number"
-            min="0"
-            max="100"
-            step="0.5"
-            inputMode="decimal"
-            placeholder="4"
-            value={form.taxRate}
-            aria-invalid={invalid('taxRate')}
-            onChange={(e) => set('taxRate', e.target.value)}
-          />
-        </Field>
-        <Field
-          label="Prispevki na mesec (€)"
-          htmlFor="pMonthlyContribution"
-          error={errors.monthlyContribution}
-          hint="Znesek najdete na e-kartici eDavki."
-        >
-          <input
-            id="pMonthlyContribution"
-            className={cls('monthlyContribution')}
-            type="number"
-            min="0"
-            step="0.01"
-            inputMode="decimal"
-            placeholder="651"
-            value={form.monthlyContribution}
-            aria-invalid={invalid('monthlyContribution')}
-            onChange={(e) => set('monthlyContribution', e.target.value)}
-          />
-        </Field>
-      </div>
 
       <div className={cardLabel}>Privzete vrednosti računa</div>
 
@@ -358,7 +267,7 @@ export function ProfileSheet({
         />
       </Field>
 
-      <div className="mb-4 grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
+      <div className={row2}>
         <Field label="Kraj izdaje" htmlFor="pPlaceOfIssue" error={errors.placeOfIssue}>
           <input
             id="pPlaceOfIssue"
@@ -374,7 +283,7 @@ export function ProfileSheet({
           label="Naslednja številka računa"
           htmlFor="pNextInvoiceNumber"
           error={errors.nextInvoiceNumber}
-          hint="Številka, ki jo bo dobil naslednji račun. Predhodne morajo biti zabeležene."
+          hint="Številka, ki jo bo dobil naslednji račun."
         >
           <input
             id="pNextInvoiceNumber"
@@ -388,7 +297,6 @@ export function ProfileSheet({
         </Field>
       </div>
 
-      {/* Only meaningful while you aren't charging VAT. */}
       {form.vatPayer === 'NE' && (
         <Field
           label="Klavzula DDV"
@@ -407,6 +315,31 @@ export function ProfileSheet({
           />
         </Field>
       )}
+
+      <div className={cardLabel}>Varnostna kopija</div>
+
+      <div className={`${hint} mb-3`}>
+        Podatki so shranjeni samo v tem brskalniku. Občasno prenesite kopijo, da jih ob
+        zamenjavi naprave ne izgubite.
+      </div>
+      <button className={`${btn.outline} ${btnBlock}`} onClick={downloadBackup}>
+        <DownloadIcon className="size-3.5" />
+        Prenesi varnostno kopijo
+      </button>
+      <button
+        className={`${btn.outline} ${btnBlock} mt-2`}
+        onClick={() => fileInput.current?.click()}
+      >
+        <UploadIcon className="size-3.5" />
+        Obnovi iz varnostne kopije
+      </button>
+      <input
+        ref={fileInput}
+        type="file"
+        accept="application/json"
+        className="hidden"
+        onChange={restoreBackup}
+      />
 
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4 text-xs text-muted-fg">
         <span className="truncate font-mono">{user?.email}</span>

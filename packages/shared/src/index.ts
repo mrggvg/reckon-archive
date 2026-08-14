@@ -16,22 +16,5 @@ export {
   invoiceNumberSchema,
 } from './profile';
 export type { ProfileInput } from './profile';
-export {
-  businessSchema,
-  effectiveTaxRate,
-  advanceCadence,
-  advanceInstalment,
-  monthsActiveInYear,
-  contributionReliefEndsOn,
-  normiranecCapUsage,
-  isActiveOn,
-  DEFAULT_EXPENSE_RATE,
-  DEFAULT_TAX_RATE,
-  DEFAULT_REVENUE_CAP,
-  DEFAULT_EXPENSE_CAP,
-  dohodninaOnRevenue,
-  MONTHLY_ADVANCE_THRESHOLD,
-} from './business';
-export type { Business } from './business';
 export { invoiceReadiness } from './readiness';
 export type { MissingField } from './readiness';

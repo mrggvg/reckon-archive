@@ -49,23 +49,7 @@ export function InvoiceIcon({ className }: { className?: string }) {
   );
 }
 
-/** feather: bar-chart-2 */
-export function ChartIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
-    </Icon>
-  );
-}
 
-/** feather: percent */
-export function TaxIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <line x1="19" y1="5" x2="5" y2="19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" />
-    </Icon>
-  );
-}
 
 /** feather: user */
 export function UserIcon({ className }: { className?: string }) {
