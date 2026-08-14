@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { CloseIcon } from './icons';
+import { useSheetActive } from './sheetActive';
 import {
   field,
   hint as hintCx,
@@ -47,6 +48,7 @@ export function Sheet({
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window !== 'undefined' && window.matchMedia(DESKTOP).matches,
   );
+  const active = useSheetActive();
   const start = useRef(0);
   const panel = useRef<HTMLDivElement>(null);
   // Measured when a drag starts; state because the scrim reads it during render.
@@ -70,12 +72,13 @@ export function Sheet({
   }, []);
 
   useEffect(() => {
+    if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [active, onClose]);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
     if (isDesktop) return;

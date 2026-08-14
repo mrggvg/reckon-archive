@@ -17,9 +17,12 @@ const digitsOnly = (value: string, max: number) =>
 
 export function ClientSheet({
   editing,
+  onCreated,
   onClose,
 }: {
   editing?: Client;
+  /** Called with the new client's id, so the caller can select it. */
+  onCreated?: (id: string) => void;
   onClose: () => void;
 }) {
   const { update, toast } = useStore();
@@ -43,6 +46,8 @@ export function ClientSheet({
     );
   };
 
+  const created = uid('cl');
+
   const save = () => {
     const parsed = clientSchema.safeParse({ ...form, rate: parseFloat(form.rate) });
     if (!parsed.success) {
@@ -58,9 +63,10 @@ export function ClientSheet({
         const c = d.clients.find((x) => x.id === editing.id);
         if (c) Object.assign(c, payload);
       } else {
-        d.clients.push({ id: uid('cl'), ...payload });
+        d.clients.push({ id: created, ...payload });
       }
     });
+    if (!editing) onCreated?.(created);
     toast('Stranka shranjena');
     onClose();
   };

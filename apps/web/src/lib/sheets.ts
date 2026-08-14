@@ -11,7 +11,7 @@ export interface EntryPrefill {
 export type SheetState =
   | { kind: 'entry'; editing?: Session; prefill?: EntryPrefill }
   | { kind: 'dayDetail'; date: string }
-  | { kind: 'client'; editing?: Client }
+  | { kind: 'client'; editing?: Client; onCreated?: (id: string) => void }
   | { kind: 'newInvoice'; clientId?: string }
   | { kind: 'importInvoice'; prefillNumber?: string }
   | { kind: 'viewInvoice'; id: string }

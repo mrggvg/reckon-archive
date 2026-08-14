@@ -4,8 +4,17 @@ import { useStore } from '../store/context';
 import { btn, btnBlock, hint, input, row2 } from '../styles/cx';
 import { Select } from '../components/Select';
 import { DateField } from '../components/DateField';
+import type { OpenSheet } from '../lib/sheets';
 
-export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => void }) {
+export function EditInvoiceSheet({
+  id,
+  onClose,
+  openSheet,
+}: {
+  id: string;
+  onClose: () => void;
+  openSheet?: OpenSheet;
+}) {
   const { data, update, toast } = useStore();
   const inv = data.invoices.find((i) => i.id === id);
 
@@ -112,6 +121,11 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
               value={clientId}
               onChange={setClientId}
               options={data.clients.map((c) => ({ value: c.id, label: c.name }))}
+              action={{
+                label: 'Dodaj novo stranko',
+                onSelect: () =>
+                  openSheet?.({ kind: 'client', onCreated: (id) => setClientId(id) }),
+              }}
             />
           </Field>
 

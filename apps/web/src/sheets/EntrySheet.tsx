@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { PlusIcon } from '../components/icons';
 import { Field, Sheet } from '../components/ui';
 import { todayIso } from '../lib/format';
-import type { EntryPrefill } from '../lib/sheets';
+import type { EntryPrefill, OpenSheet } from '../lib/sheets';
 import { uid } from '../lib/storage';
 import type { Session } from '../lib/types';
 import { useStore } from '../store/context';
@@ -14,10 +15,12 @@ export function EntrySheet({
   editing,
   prefill,
   onClose,
+  openSheet,
 }: {
   editing?: Session;
   prefill?: EntryPrefill;
   onClose: () => void;
+  openSheet?: OpenSheet;
 }) {
   const { data, update, toast } = useStore();
   const [clientId, setClientId] = useState(
@@ -56,8 +59,20 @@ export function EntrySheet({
 
   if (data.clients.length === 0) {
     return (
-      <Sheet title="Vnesi ure" onClose={onClose}>
-        <p className={hint}>Najprej dodajte stranko — ure se vedno beležijo nanjo.</p>
+      <Sheet
+        title="Vnesi ure"
+        onClose={onClose}
+        footer={
+          <button
+            className={`${btn.primary} ${btnBlock}`}
+            onClick={() => openSheet?.({ kind: 'client' })}
+          >
+            <PlusIcon className="size-3.5" />
+            Dodaj stranko
+          </button>
+        }
+      >
+        <p className={hint}>Ure se vedno beležijo na stranko, zato jo dodajte najprej.</p>
       </Sheet>
     );
   }
@@ -78,6 +93,11 @@ export function EntrySheet({
           value={clientId}
           onChange={setClientId}
           options={data.clients.map((c) => ({ value: c.id, label: c.name }))}
+          action={{
+            label: 'Dodaj novo stranko',
+            onSelect: () =>
+              openSheet?.({ kind: 'client', onCreated: (id) => setClientId(id) }),
+          }}
         />
       </Field>
 

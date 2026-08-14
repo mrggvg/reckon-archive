@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ChevronDownIcon } from './icons';
+import { ChevronDownIcon, PlusIcon } from './icons';
 import { Popover } from './Popover';
 
 export interface SelectOption {
@@ -20,6 +20,7 @@ export function Select({
   onChange,
   placeholder = 'Izberi …',
   emptyLabel = 'Ni možnosti za izbiro',
+  action,
 }: {
   id?: string;
   value: string;
@@ -27,6 +28,8 @@ export function Select({
   onChange: (value: string) => void;
   placeholder?: string;
   emptyLabel?: string;
+  /** Optional row at the foot of the list, e.g. "add a new one". */
+  action?: { label: string; onSelect: () => void };
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -138,7 +141,7 @@ export function Select({
 
       <Popover anchor={wrap} open={open} onClose={() => setOpen(false)} maxHeight={240}>
         <ul id={listId} role="listbox" aria-label="Možnosti" className="p-1" ref={list}>
-          {options.length === 0 && (
+          {options.length === 0 && !action && (
             <li className="px-3 py-2 text-sm text-muted-fg">{emptyLabel}</li>
           )}
           {options.map((o, i) => {
@@ -174,6 +177,22 @@ export function Select({
               </li>
             );
           })}
+
+          {action && (
+            <li
+              className={
+                'flex cursor-pointer items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium text-primary desk:py-2 ' +
+                (options.length > 0 ? 'mt-1 border-t border-border pt-2.5' : '')
+              }
+              onClick={() => {
+                setOpen(false);
+                action.onSelect();
+              }}
+            >
+              <PlusIcon className="size-3.5" />
+              {action.label}
+            </li>
+          )}
         </ul>
       </Popover>
     </div>

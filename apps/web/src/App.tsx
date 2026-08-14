@@ -18,6 +18,7 @@ import { ProfileSheet } from './sheets/ProfileSheet';
 import { TimesheetSheet } from './sheets/TimesheetSheet';
 import { ViewInvoiceSheet } from './sheets/ViewInvoiceSheet';
 import { iconBtn } from './styles/cx';
+import { SheetActiveContext } from './components/sheetActive';
 import { Toast } from './components/Toast';
 import { useStore } from './store/context';
 
@@ -77,7 +78,7 @@ export default function App() {
   };
 
   const profileTag = data.profile.name || 'uredi podatke →';
-  const top = stack[stack.length - 1];
+
 
   return (
     <div className="flex h-svh overflow-hidden pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
@@ -172,43 +173,71 @@ export default function App() {
         </button>
       )}
 
-      {top?.kind === 'entry' && (
-        <EntrySheet editing={top.editing} prefill={top.prefill} onClose={closeSheet} />
-      )}
-      {top?.kind === 'dayDetail' && (
-        <DayDetailSheet
-          date={top.date}
-          onClose={closeSheet}
-          openSheet={openSheet}
-          replaceSheet={replaceSheet}
-        />
-      )}
-      {top?.kind === 'client' && <ClientSheet editing={top.editing} onClose={closeSheet} />}
-      {top?.kind === 'newInvoice' && (
-        <NewInvoiceSheet
-          clientId={top.clientId}
-          onClose={closeSheet}
-          replaceSheet={replaceSheet}
-        />
-      )}
-      {top?.kind === 'importInvoice' && (
-        <ImportInvoiceSheet
-          onClose={closeSheet}
-          replaceSheet={replaceSheet}
-          prefillNumber={top.prefillNumber}
-        />
-      )}
-      {top?.kind === 'viewInvoice' && (
-        <ViewInvoiceSheet
-          id={top.id}
-          onClose={closeSheet}
-          openSheet={openSheet}
-          replaceSheet={replaceSheet}
-        />
-      )}
-      {top?.kind === 'editInvoice' && <EditInvoiceSheet id={top.id} onClose={closeSheet} />}
-      {top?.kind === 'timesheet' && <TimesheetSheet id={top.id} onClose={closeSheet} />}
-      {top?.kind === 'profile' && <ProfileSheet onClose={closeSheet} />}
+      {stack.map((sheet, i) => {
+        const isTop = i === stack.length - 1;
+        // Covered sheets stay mounted so their half-filled forms survive.
+        return (
+          <SheetActiveContext.Provider key={i} value={isTop}>
+            <div className={isTop ? undefined : 'hidden'} inert={!isTop}>
+              {sheet.kind === 'entry' && (
+                <EntrySheet
+                  editing={sheet.editing}
+                  prefill={sheet.prefill}
+                  onClose={closeSheet}
+                  openSheet={openSheet}
+                />
+              )}
+              {sheet.kind === 'dayDetail' && (
+                <DayDetailSheet
+                  date={sheet.date}
+                  onClose={closeSheet}
+                  openSheet={openSheet}
+                  replaceSheet={replaceSheet}
+                />
+              )}
+              {sheet.kind === 'client' && (
+                <ClientSheet
+                  editing={sheet.editing}
+                  onCreated={sheet.onCreated}
+                  onClose={closeSheet}
+                />
+              )}
+              {sheet.kind === 'newInvoice' && (
+                <NewInvoiceSheet
+                  clientId={sheet.clientId}
+                  onClose={closeSheet}
+                  openSheet={openSheet}
+                  replaceSheet={replaceSheet}
+                />
+              )}
+              {sheet.kind === 'importInvoice' && (
+                <ImportInvoiceSheet
+                  onClose={closeSheet}
+                  openSheet={openSheet}
+                  replaceSheet={replaceSheet}
+                  prefillNumber={sheet.prefillNumber}
+                />
+              )}
+              {sheet.kind === 'viewInvoice' && (
+                <ViewInvoiceSheet
+                  id={sheet.id}
+                  onClose={closeSheet}
+                  openSheet={openSheet}
+                  replaceSheet={replaceSheet}
+                />
+              )}
+              {sheet.kind === 'editInvoice' && (
+                <EditInvoiceSheet id={sheet.id} onClose={closeSheet} openSheet={openSheet} />
+              )}
+              {sheet.kind === 'timesheet' && (
+                <TimesheetSheet id={sheet.id} onClose={closeSheet} />
+              )}
+              {sheet.kind === 'profile' && <ProfileSheet onClose={closeSheet} />}
+            </div>
+          </SheetActiveContext.Provider>
+        );
+      })}
+
       <Toast panelOpen={stack.length > 0} />
     </div>
   );

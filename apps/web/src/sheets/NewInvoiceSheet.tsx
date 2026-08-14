@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { invoiceReadiness } from '@reckon/shared';
 import { ProfileRequired } from '../components/ProfileRequired';
+import { PlusIcon } from '../components/icons';
 import { Field, Sheet } from '../components/ui';
 import {
   addDaysIso,
@@ -20,10 +21,12 @@ import type { OpenSheet } from '../lib/sheets';
 export function NewInvoiceSheet({
   clientId: initialClientId,
   onClose,
+  openSheet,
   replaceSheet,
 }: {
   clientId?: string;
   onClose: () => void;
+  openSheet?: OpenSheet;
   replaceSheet?: OpenSheet;
 }) {
   const { data, update, toast } = useStore();
@@ -110,8 +113,20 @@ export function NewInvoiceSheet({
 
   if (data.clients.length === 0) {
     return (
-      <Sheet title="Nov račun" onClose={onClose}>
-        <p className={hint}>Najprej dodajte stranko.</p>
+      <Sheet
+        title="Nov račun"
+        onClose={onClose}
+        footer={
+          <button
+            className={`${btn.primary} ${btnBlock}`}
+            onClick={() => openSheet?.({ kind: 'client' })}
+          >
+            <PlusIcon className="size-3.5" />
+            Dodaj stranko
+          </button>
+        }
+      >
+        <p className={hint}>Račun potrebuje stranko, zato jo dodajte najprej.</p>
       </Sheet>
     );
   }
@@ -143,6 +158,17 @@ export function NewInvoiceSheet({
             label: c.name,
             hint: `${fmtMoney(c.rate)}/h`,
           }))}
+          action={{
+            label: 'Dodaj novo stranko',
+            onSelect: () =>
+              openSheet?.({
+                kind: 'client',
+                onCreated: (id) => {
+                  setClientId(id);
+                  setUnchecked([]);
+                },
+              }),
+          }}
         />
       </Field>
 

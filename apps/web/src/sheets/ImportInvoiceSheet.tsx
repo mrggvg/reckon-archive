@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { invoiceReadiness } from '@reckon/shared';
 import { ProfileRequired } from '../components/ProfileRequired';
+import { PlusIcon } from '../components/icons';
 import { Field, Sheet } from '../components/ui';
 import { uid } from '../lib/storage';
 import { useStore } from '../store/context';
@@ -11,10 +12,12 @@ import type { OpenSheet } from '../lib/sheets';
 
 export function ImportInvoiceSheet({
   onClose,
+  openSheet,
   replaceSheet,
   prefillNumber,
 }: {
   onClose: () => void;
+  openSheet?: OpenSheet;
   replaceSheet?: OpenSheet;
   /** Pre-set when recording a specific gap in the numbering. */
   prefillNumber?: string;
@@ -82,8 +85,20 @@ export function ImportInvoiceSheet({
 
   if (data.clients.length === 0) {
     return (
-      <Sheet title="Uvoz računa" onClose={onClose}>
-        <p className={hint}>Najprej dodajte stranko.</p>
+      <Sheet
+        title="Uvoz računa"
+        onClose={onClose}
+        footer={
+          <button
+            className={`${btn.primary} ${btnBlock}`}
+            onClick={() => openSheet?.({ kind: 'client' })}
+          >
+            <PlusIcon className="size-3.5" />
+            Dodaj stranko
+          </button>
+        }
+      >
+        <p className={hint}>Račun potrebuje stranko, zato jo dodajte najprej.</p>
       </Sheet>
     );
   }
@@ -108,6 +123,11 @@ export function ImportInvoiceSheet({
           value={clientId}
           onChange={setClientId}
           options={data.clients.map((c) => ({ value: c.id, label: c.name }))}
+          action={{
+            label: 'Dodaj novo stranko',
+            onSelect: () =>
+              openSheet?.({ kind: 'client', onCreated: (id) => setClientId(id) }),
+          }}
         />
       </Field>
 
