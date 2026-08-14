@@ -31,10 +31,18 @@ create unique index users_email_lower_key on users (lower(email));
 create table profiles (
   user_id                    uuid primary key references users (id) on delete cascade,
   full_name                  text not null default '',
-  address                    text not null default '',
-  tax_number                 text not null default '',
-  reg_number                 text not null default '',
-  iban                       text not null default '',
+  -- Address in parts, joined only when an invoice is printed.
+  street                     text not null default '',
+  postal_code                text not null default ''
+                               check (postal_code = '' or postal_code ~ '^[1-9][0-9]{3}$'),
+  city                       text not null default '',
+  tax_number                 text not null default ''
+                               check (tax_number = '' or tax_number ~ '^[1-9][0-9]{7}$'),
+  -- 7 digits, or 10 with the AJPES unit suffix.
+  reg_number                 text not null default ''
+                               check (reg_number = '' or reg_number ~ '^[0-9]{7}([0-9]{3})?$'),
+  iban                       text not null default ''
+                               check (iban = '' or iban ~ '^SI56[0-9]{15}$'),
   -- Share of paid income set aside for akontacija dohodnine.
   tax_rate_percent           numeric(5, 2) not null default 4
                                check (tax_rate_percent >= 0 and tax_rate_percent <= 100),
@@ -58,8 +66,11 @@ create table clients (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references users (id) on delete cascade,
   company_name text not null check (length(btrim(company_name)) > 0),
-  address      text not null default '',
-  tax_number   text not null default '',
+  -- Address in parts, joined only when an invoice is printed.
+  street       text not null default '',
+  postal_code  text not null default '' check (postal_code = '' or postal_code ~ '^[1-9][0-9]{3}$'),
+  city         text not null default '',
+  tax_number   text not null default '' check (tax_number = '' or tax_number ~ '^[1-9][0-9]{7}$'),
   rate_cents   integer not null default 0 check (rate_cents >= 0),
   email        text not null default '',
   phone        text not null default '',

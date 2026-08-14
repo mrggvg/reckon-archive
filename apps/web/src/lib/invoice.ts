@@ -17,7 +17,7 @@ export function parseInvoiceNumber(
 
 export function nextInvoiceNumber(
   invoices: Invoice[],
-  lastManualNumber: string,
+  declaredNext: string,
   issueDateIso: string,
 ): string {
   const year = new Date(issueDateIso + 'T00:00:00').getFullYear();
@@ -26,9 +26,42 @@ export function nextInvoiceNumber(
     const parsed = parseInvoiceNumber(inv.number);
     if (parsed && parsed.year === year) maxSeq = Math.max(maxSeq, parsed.seq);
   });
-  const manual = parseInvoiceNumber(lastManualNumber);
-  if (manual && manual.year === year) maxSeq = Math.max(maxSeq, manual.seq);
-  return `${String(maxSeq + 1).padStart(3, '0')}/${year}`;
+
+  // Whatever the profile declares is a floor: an s.p. that issued 001 and 002
+  // by hand starts the app's series at 003, not 001.
+  const declared = parseInvoiceNumber(declaredNext);
+  const floor = declared && declared.year === year ? declared.seq : 1;
+  return `${String(Math.max(maxSeq + 1, floor)).padStart(3, '0')}/${year}`;
+}
+
+/**
+ * Numbers that must exist but aren't recorded here.
+ *
+ * Invoice numbers run unbroken from 001 each year, so declaring that the next
+ * one is 003/2026 is also declaring that 001 and 002 were issued elsewhere.
+ * Until those are entered, any total in the app is missing income.
+ */
+export function missingInvoiceNumbers(
+  declaredNext: string,
+  invoices: Invoice[],
+): string[] {
+  const declared = parseInvoiceNumber(declaredNext);
+  if (!declared) return [];
+
+  const recorded = new Set(
+    invoices
+      .map((i) => parseInvoiceNumber(i.number))
+      .filter((p) => p !== null && p.year === declared.year)
+      .map((p) => p!.seq),
+  );
+
+  const missing: string[] = [];
+  for (let seq = 1; seq < declared.seq; seq++) {
+    if (!recorded.has(seq)) {
+      missing.push(`${String(seq).padStart(3, '0')}/${declared.year}`);
+    }
+  }
+  return missing;
 }
 
 /** NNN/YYYY -> sortable number. */
@@ -57,4 +90,16 @@ export const STATUS_BADGE: Record<InvoiceStatus, 'success' | 'warning' | 'error'
   paid: 'success',
   unpaid: 'warning',
   overdue: 'error',
+};
+
+export const STATUS_LABEL: Record<InvoiceStatus, string> = {
+  paid: 'Plačano',
+  unpaid: 'Neplačano',
+  overdue: 'Zapadlo',
+};
+
+/** Where a tracked hour sits in the billing cycle. */
+export const BILLING_LABEL: Record<'invoiced' | 'paid', string> = {
+  invoiced: 'zaračunano',
+  paid: 'plačano',
 };

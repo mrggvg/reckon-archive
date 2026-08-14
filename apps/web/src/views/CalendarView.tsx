@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import {
   MONTH_NAMES,
+  WEEKDAY_NAMES,
   clientColor,
   fmtHours,
   fmtHoursCompact,
@@ -19,9 +20,9 @@ import { sessionBillingLabel } from '../lib/invoice';
 
 /** The billing cycle, in order, with the colour each stage owns app-wide. */
 const BILLING_LEGEND = [
-  { key: 'unbilled', label: 'Unbilled', swatch: 'bg-accent' },
-  { key: 'invoiced', label: 'Invoiced', swatch: 'bg-primary' },
-  { key: 'paid', label: 'Paid', swatch: 'bg-secondary' },
+  { key: 'unbilled', label: 'Neobračunano', swatch: 'bg-accent' },
+  { key: 'invoiced', label: 'Zaračunano', swatch: 'bg-primary' },
+  { key: 'paid', label: 'Plačano', swatch: 'bg-secondary' },
 ] as const;
 import { useStore } from '../store/context';
 import { btn, btnXs, chip, emptyInline, iconBtn, tabSeg } from '../styles/cx';
@@ -87,7 +88,7 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
         end: s.end,
         note: s.note,
         hours: h,
-        client: data.clients.find((c) => c.id === s.clientId)?.name ?? 'Unassigned',
+        client: data.clients.find((c) => c.id === s.clientId)?.name ?? 'Brez stranke',
         billing,
       });
       const seg = stat.segments.find((x) => x.clientId === s.clientId);
@@ -146,12 +147,12 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 
   if (data.clients.length === 0) {
-    return <div className={emptyInline}>Add a client to see the calendar.</div>;
+    return <div className={emptyInline}>Za prikaz koledarja dodajte stranko.</div>;
   }
 
   return (
     <>
-      <div className="mb-3 flex gap-2 overflow-x-auto pb-1.5 [scrollbar-width:none]">
+      <div className="mb-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
         {data.clients.map((c) => {
           const active = !hidden.includes(c.id);
           return (
@@ -171,8 +172,8 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
         })}
       </div>
 
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <button className={iconBtn} onClick={() => shiftMonth(-1)} aria-label="Previous month">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <button className={iconBtn} onClick={() => shiftMonth(-1)} aria-label="Prejšnji mesec">
           <ChevronLeftIcon />
         </button>
         <div className="flex min-w-0 items-center gap-2.5">
@@ -181,45 +182,45 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
           </h2>
           {!isCurrentMonth && (
             <button className={`${btn.outline} ${btnXs}`} onClick={jumpToToday}>
-              Today
+              Danes
             </button>
           )}
         </div>
-        <button className={iconBtn} onClick={() => shiftMonth(1)} aria-label="Next month">
+        <button className={iconBtn} onClick={() => shiftMonth(1)} aria-label="Naslednji mesec">
           <ChevronRightIcon />
         </button>
       </div>
 
-      <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-muted px-3.5 py-2.5 text-xs text-muted-fg">
+      <div className="mb-3 flex items-center justify-between rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-fg">
         <div className="flex gap-5">
           <div>
             <span className="font-mono text-sm font-bold text-fg">{fmtHours(monthHours)}</span>{' '}
-            this month
+            ta mesec
           </div>
           <div>
             <span className="font-mono text-sm font-bold text-fg">{fmtHours(monthUnbilled)}</span>{' '}
-            unbilled
+            neobračunano
           </div>
         </div>
         <div>
-          {daysWorked} {daysWorked === 1 ? 'day' : 'days'}
+          {daysWorked} {daysWorked === 1 ? 'dan' : 'dni'}
         </div>
       </div>
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-1">
           <button className={tabSeg(colorBy === 'status')} onClick={() => setColorBy('status')}>
             <BillingIcon className="size-3.5" />
-            By status
+            Po statusu
           </button>
           <button className={tabSeg(colorBy === 'client')} onClick={() => setColorBy('client')}>
             <ClientsIcon className="size-3.5" />
-            By client
+            Po stranki
           </button>
         </div>
 
         {colorBy === 'status' && (
-          <div className="flex flex-wrap items-center gap-3 text-2xs text-muted-fg">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-fg">
             {BILLING_LEGEND.map((l) => (
               <span key={l.label} className="inline-flex items-center gap-1.5">
                 <span className={`size-2.5 rounded-full ${l.swatch}`} />
@@ -230,8 +231,8 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
         )}
       </div>
 
-      <div className="mb-1.5 grid grid-cols-7 gap-1 desk:gap-1.5" aria-hidden="true">
-        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((w, i) => (
+      <div className="mb-1 grid grid-cols-7 gap-0.5 desk:gap-1.5" aria-hidden="true">
+        {WEEKDAY_NAMES.map((w, i) => (
           <span
             key={w}
             className={
@@ -245,7 +246,7 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
       </div>
 
       <div
-        className="grid grid-cols-7 gap-1 desk:gap-1.5"
+        className="grid grid-cols-7 gap-0.5 desk:gap-1.5"
         role="grid"
         aria-label={`${MONTH_NAMES[month]} ${year}`}
         onKeyDown={onGridKeyDown}
@@ -256,7 +257,7 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
               if (day === null) {
                 return (
                   <div
-                    className="invisible aspect-square desk:aspect-auto desk:h-28"
+                    className="invisible min-h-16 desk:h-28"
                     role="gridcell"
                     key={`b${wi}-${di}`}
                   />
@@ -265,7 +266,7 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
               const iso = isoOf(new Date(year, month, day));
               const stat = days.get(iso);
               const hasEntries = datesWithEntries.has(iso);
-              const label = new Date(year, month, day).toLocaleDateString('en-GB', {
+              const label = new Date(year, month, day).toLocaleDateString('sl-SI', {
                 weekday: 'long',
                 day: 'numeric',
                 month: 'long',
@@ -280,7 +281,7 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
                   }}
                   tabIndex={day === Math.min(focusDay, daysInMonth) ? 0 : -1}
                   className={
-                    'group relative flex aspect-square min-h-14 cursor-pointer flex-col gap-1 rounded-md border p-1.5 text-left transition-all duration-100 hover:border-primary hover:bg-primary/12 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/15 desk:aspect-auto desk:h-28 desk:p-2 ' +
+                    'group relative flex min-h-16 cursor-pointer flex-col gap-1 rounded-md border p-1 text-left transition-all duration-100 hover:border-primary hover:bg-primary/12 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/15 desk:h-28 desk:p-2 ' +
                     (stat
                       ? 'border-border bg-card shadow-xs'
                       : 'border-transparent bg-muted') +
@@ -288,12 +289,12 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
                   }
                   aria-label={
                     stat
-                      ? `${label} — ${fmtHours(stat.hours)} across ${stat.entries} ${
-                          stat.entries === 1 ? 'entry' : 'entries'
+                      ? `${label} — ${fmtHours(stat.hours)} v ${stat.entries} ${
+                          stat.entries === 1 ? 'vnosu' : 'vnosih'
                         }${BILLING_LEGEND.filter((l) => stat[l.key] > 0)
                           .map((l) => `, ${fmtHours(stat[l.key])} ${l.label.toLowerCase()}`)
                           .join('')}`
-                      : `${label} — no hours logged, add an entry`
+                      : `${label} — ni zabeleženih ur, dodajte vnos`
                   }
                   onClick={() =>
                     hasEntries
@@ -345,7 +346,7 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
                       ))}
                       {stat.list.length > MAX_CHIPS && (
                         <span className="text-2xs font-semibold leading-tight text-muted-fg">
-                          +{stat.list.length - MAX_CHIPS} more
+                          +{stat.list.length - MAX_CHIPS} več
                         </span>
                       )}
                     </span>

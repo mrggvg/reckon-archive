@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Field, Sheet } from '../components/ui';
 import { useStore } from '../store/context';
 import { btn, btnBlock, hint, input, row2 } from '../styles/cx';
+import { Select } from '../components/Select';
+import { DateField } from '../components/DateField';
 
 export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => void }) {
   const { data, update, toast } = useStore();
@@ -18,8 +20,8 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
 
   if (!inv) {
     return (
-      <Sheet title="Edit invoice" onClose={onClose}>
-        <p className={hint}>That invoice no longer exists.</p>
+      <Sheet title="Uredi račun" onClose={onClose}>
+        <p className={hint}>Ta račun ne obstaja več.</p>
       </Sheet>
     );
   }
@@ -28,11 +30,11 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
 
   const save = () => {
     if (!number.trim()) {
-      toast('Invoice number is required');
+      toast('Številka računa je obvezna');
       return;
     }
     if (data.invoices.some((i) => i.id !== id && i.number === number.trim())) {
-      toast('That invoice number is already used');
+      toast('Ta številka računa je že v uporabi');
       return;
     }
     update((d) => {
@@ -50,24 +52,32 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
         if (!isNaN(parsed)) target.total = parsed;
       }
     });
-    toast('Invoice updated');
+    toast('Račun posodobljen');
     onClose();
   };
 
   return (
-    <Sheet title="Edit invoice" onClose={onClose}>
-      <Field label="Invoice number" htmlFor="editInvNumber">
+    <Sheet
+      title="Uredi račun"
+      onClose={onClose}
+      footer={
+        <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
+          Shrani spremembe
+        </button>
+      }
+    >
+      <Field label="Številka računa" htmlFor="editInvNumber">
         <input
           id="editInvNumber"
           className={input}
           type="text"
-          placeholder="e.g. 003/2026"
+          placeholder="npr. 003/2026"
           value={number}
           onChange={(e) => setNumber(e.target.value)}
         />
       </Field>
 
-      <Field label="Service description" htmlFor="editInvDesc">
+      <Field label="Opis storitve" htmlFor="editInvDesc">
         <input
           id="editInvDesc"
           className={input}
@@ -78,65 +88,51 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
       </Field>
 
       <div className={row2}>
-        <Field label="Issue date" htmlFor="editInvIssueDate">
-          <input
-            id="editInvIssueDate"
-            className={input}
-            type="date"
-            value={issueDate}
-            onChange={(e) => setIssueDate(e.target.value)}
-          />
+        <Field label="Datum izdaje" htmlFor="editInvIssueDate">
+          <DateField
+          id="editInvIssueDate"
+          value={issueDate}
+          onChange={setIssueDate}
+        />
         </Field>
-        <Field label="Due date" htmlFor="editInvDueDate">
-          <input
-            id="editInvDueDate"
-            className={input}
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-          />
+        <Field label="Rok plačila" htmlFor="editInvDueDate">
+          <DateField
+          id="editInvDueDate"
+          value={dueDate}
+          onChange={setDueDate}
+        />
         </Field>
       </div>
 
       {isImported ? (
         <>
-          <Field label="Client" htmlFor="editInvClient">
-            <select
+          <Field label="Stranka" htmlFor="editInvClient">
+            <Select
               id="editInvClient"
-              className={input}
               value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-            >
-              {data.clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              onChange={setClientId}
+              options={data.clients.map((c) => ({ value: c.id, label: c.name }))}
+            />
           </Field>
 
           <div className={row2}>
-            <Field label="Period from" htmlFor="editInvPeriodStart">
-              <input
-                id="editInvPeriodStart"
-                className={input}
-                type="date"
-                value={periodStart}
-                onChange={(e) => setPeriodStart(e.target.value)}
-              />
+            <Field label="Obdobje od" htmlFor="editInvPeriodStart">
+              <DateField
+          id="editInvPeriodStart"
+          value={periodStart}
+          onChange={setPeriodStart}
+        />
             </Field>
-            <Field label="Period to" htmlFor="editInvPeriodEnd">
-              <input
-                id="editInvPeriodEnd"
-                className={input}
-                type="date"
-                value={periodEnd}
-                onChange={(e) => setPeriodEnd(e.target.value)}
-              />
+            <Field label="Obdobje do" htmlFor="editInvPeriodEnd">
+              <DateField
+          id="editInvPeriodEnd"
+          value={periodEnd}
+          onChange={setPeriodEnd}
+        />
             </Field>
           </div>
 
-          <Field label="Total (EUR)" htmlFor="editInvTotal">
+          <Field label="Znesek (EUR)" htmlFor="editInvTotal">
             <input
               id="editInvTotal"
               className={input}
@@ -150,14 +146,11 @@ export function EditInvoiceSheet({ id, onClose }: { id: string; onClose: () => v
         </>
       ) : (
         <div className={`${hint} mb-4`}>
-          Total, period, and client are derived from linked hours, so they&apos;re locked
-          here — edit the underlying entries in Track instead.
+          Znesek, obdobje in stranka izhajajo iz povezanih ur, zato jih tu ni mogoče
+          spreminjati — uredite vnose pod Ure.
         </div>
       )}
 
-      <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
-        Save changes
-      </button>
     </Sheet>
   );
 }

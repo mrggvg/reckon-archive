@@ -9,7 +9,7 @@
     "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "paths": { "@reckon/shared": ["../../packages/shared/src"] }
+    "paths": { "@reckon/shared": ["../../packages/shared/src/index.ts"] }
   },
   "include": ["src"]
 }

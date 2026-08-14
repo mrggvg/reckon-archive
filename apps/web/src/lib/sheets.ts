@@ -1,3 +1,4 @@
+import type { Business } from '@reckon/shared';
 import type { Client, Session } from './types';
 
 export interface EntryPrefill {
@@ -13,11 +14,12 @@ export type SheetState =
   | { kind: 'dayDetail'; date: string }
   | { kind: 'client'; editing?: Client }
   | { kind: 'newInvoice'; clientId?: string }
-  | { kind: 'importInvoice' }
+  | { kind: 'importInvoice'; prefillNumber?: string }
   | { kind: 'viewInvoice'; id: string }
   | { kind: 'editInvoice'; id: string }
   | { kind: 'timesheet'; id: string }
   | { kind: 'taxPayment' }
-  | { kind: 'profile' };
+  | { kind: 'profile' }
+  | { kind: 'business'; editing?: Business };
 
 export type OpenSheet = (sheet: SheetState) => void;

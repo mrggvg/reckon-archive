@@ -8,15 +8,17 @@ insert into users (id, email, password_hash) values
   ('11111111-1111-1111-1111-111111111111', 'dev@reckon.local', 'scrypt$2pMpN92S27oJyVxR4bK8tQ==$72KQCa4dDZxRO7c5usSzQVp6P3EKVKWaNNeNkgEFg9VkdQqRPOIes6ySW+T7V/ezrpjuv8Qk6EhV8gFd5qDPfw==');
 
 insert into profiles (
-  user_id, full_name, address, tax_number, iban,
+  user_id, full_name, street, postal_code, city, tax_number, iban,
   tax_rate_percent, vat_payer, monthly_contribution_cents,
   default_description, place_of_issue, vat_clause
 ) values (
   '11111111-1111-1111-1111-111111111111',
   'Dev Uporabnik s.p.',
-  'Izletniška pot 1, 6000 Koper',
-  '12345678',
-  'SI56 1010 0005 8079 036',
+  'Izletniška pot 1',
+  '6000',
+  'Koper',
+  '82426490',
+  'SI56101000058079036',
   4,
   false,
   65100,
@@ -25,11 +27,11 @@ insert into profiles (
   'Nisem zavezanec za DDV po 1. odstavku 94. člena ZDDV-1.'
 );
 
-insert into clients (id, user_id, company_name, address, tax_number, rate_cents, email) values
+insert into clients (id, user_id, company_name, street, postal_code, city, tax_number, rate_cents, email) values
   ('22222222-2222-2222-2222-222222222221', '11111111-1111-1111-1111-111111111111',
-   'Vikram d.o.o.', 'Vojkovo nabrežje 31a, 6000 Koper', '29825962', 1500, 'racuni@vikram.si'),
+   'Vikram d.o.o.', 'Vojkovo nabrežje 31a', '6000', 'Koper', '29825962', 1500, 'racuni@vikram.si'),
   ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111',
-   'Nordis d.o.o.', 'Dunajska cesta 10, 1000 Ljubljana', '87654321', 3000, '');
+   'Nordis d.o.o.', 'Dunajska cesta 10', '1000', 'Ljubljana', '87654321', 3000, '');
 
 -- One invoice already issued and paid, one still outstanding and overdue.
 insert into invoices (

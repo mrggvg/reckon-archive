@@ -30,7 +30,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch {
     // Status 0 means the request never landed — a dead API reads differently
     // from a rejected one, and the message should say so.
-    throw new ApiError(0, "Can't reach the server. Is the API running?");
+    throw new ApiError(0, 'Strežnik ni dosegljiv. Ali API teče?');
   }
 
   if (res.status === 204) return undefined as T;
@@ -38,7 +38,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
     const err = (body ?? {}) as ErrorBody;
-    throw new ApiError(res.status, err.error ?? 'Something went wrong', err.fields);
+    throw new ApiError(res.status, err.error ?? 'Prišlo je do napake', err.fields);
   }
   return body as T;
 }

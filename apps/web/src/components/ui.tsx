@@ -11,41 +11,59 @@ import {
   statValue,
 } from '../styles/cx';
 
-/** Drag this far down and letting go dismisses the sheet. */
+/** Drag this far and letting go dismisses the panel. */
 const DISMISS_AFTER = 110;
 
-/** Backdrop opacity when the sheet is at rest. */
+/** Backdrop opacity when the panel is at rest. */
 const SCRIM_MAX = 0.5;
 
 /** Decelerating curve — quick off the mark, soft on arrival. */
 const EASE = '250ms cubic-bezier(0.32, 0.72, 0, 1)';
 
+const DESKTOP = '(min-width: 900px)';
+
+/**
+ * Full-screen on a phone, a flush right-hand drawer on a desktop. Both slide in
+ * from the edge they're anchored to. Only the phone version is draggable — a
+ * pointer has a close button and Escape, a thumb doesn't.
+ */
 export function Sheet({
   title,
   onClose,
   children,
+  footer,
   printable = false,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** Pinned below the scrolling body — where the save action lives. */
+  footer?: ReactNode;
   printable?: boolean;
 }) {
-  const [dragY, setDragY] = useState(0);
+  const [drag, setDrag] = useState(0);
   const [dragging, setDragging] = useState(false);
-  const startY = useRef(0);
-  const panel = useRef<HTMLDivElement>(null);
-  // Measured when a drag starts; state rather than a ref, because the scrim
-  // opacity below is computed from it during render.
-  const [panelHeight, setPanelHeight] = useState(0);
   const [entered, setEntered] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(DESKTOP).matches,
+  );
+  const start = useRef(0);
+  const panel = useRef<HTMLDivElement>(null);
+  // Measured when a drag starts; state because the scrim reads it during render.
+  const [panelSize, setPanelSize] = useState(0);
 
-  // How far through a dismissal the drag is, measured against the sheet's own
-  // height so a tall sheet doesn't fade out in the first centimetre.
-  const progress = Math.min(1, dragY / Math.max(panelHeight * 0.8, 240));
+  // Desktop slides in horizontally but is never dragged; the phone sheet is.
+  const progress = Math.min(1, drag / Math.max(panelSize * 0.8, 240));
 
-  // Paint once in the offscreen state, then flip on the next frame so the
-  // browser has something to animate from.
+  useEffect(() => {
+    const mq = window.matchMedia(DESKTOP);
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  // Paint once offscreen, then flip on the next frame so the browser has
+  // something to animate from.
   useEffect(() => {
     const frame = requestAnimationFrame(() => setEntered(true));
     return () => cancelAnimationFrame(frame);
@@ -59,34 +77,44 @@ export function Sheet({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Pointer events cover mouse and touch with one path.
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
+    if (isDesktop) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    startY.current = e.clientY;
-    setPanelHeight(panel.current?.offsetHeight ?? 0);
+    start.current = e.clientY;
+    setPanelSize(panel.current?.offsetHeight ?? 0);
     setDragging(true);
   };
 
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const onPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
     if (!dragging) return;
     // Downward only — dragging up shouldn't lift the sheet off its edge.
-    setDragY(Math.max(0, e.clientY - startY.current));
+    setDrag(Math.max(0, e.clientY - start.current));
   };
 
   const onPointerUp = () => {
     setDragging(false);
-    if (dragY > DISMISS_AFTER) onClose();
-    else setDragY(0);
+    if (drag > DISMISS_AFTER) onClose();
+    else setDrag(0);
   };
+
+  const dragHandlers = {
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel: onPointerUp,
+  };
+
+  const offscreen = isDesktop ? 'translateX(100%)' : 'translateY(100%)';
+  const atRest = isDesktop ? 'translateX(0)' : `translateY(${drag}px)`;
 
   return (
     <div
       className={
-        'fixed inset-0 z-100 flex items-end justify-center desk:items-center desk:p-6' +
+        'fixed inset-0 z-100 flex items-end justify-center desk:items-stretch desk:justify-end' +
         (printable ? ' print-doc' : '')
       }
       style={{
-        // Darkens on open, lightens as the sheet is pulled away.
+        // Darkens on open, lightens as the panel is pulled away.
         backgroundColor: `rgb(0 0 0 / ${entered ? SCRIM_MAX * (1 - progress) : 0})`,
         transition: dragging ? 'none' : `background-color ${EASE}`,
       }}
@@ -99,22 +127,22 @@ export function Sheet({
     >
       <div
         ref={panel}
-        className="sheet flex max-h-[90svh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-b-0 border-border bg-card shadow-[0_-10px_40px_rgb(0_0_0/0.15)] desk:max-h-[90vh] desk:w-[560px] desk:max-w-[95vw] desk:rounded-2xl desk:border-b desk:shadow-2xl"
+        className="sheet relative flex h-svh w-full flex-col overflow-hidden border-border bg-card shadow-[0_-10px_40px_rgb(0_0_0/0.15)] desk:h-full desk:w-1/3 desk:min-w-[440px] desk:max-w-[580px] desk:border-l desk:shadow-2xl"
         style={{
-          transform: entered ? `translateY(${dragY}px)` : 'translateY(100%)',
+          transform: entered ? atRest : offscreen,
           transition: dragging ? 'none' : `transform ${EASE}`,
         }}
       >
-        {/* Grab area: the handle and the title row both drag. */}
+        {/* Phone grab area: the handle and the title row both drag. */}
         <div
-          className="no-print shrink-0 cursor-grab touch-none select-none px-4 pt-3 active:cursor-grabbing desk:px-7 desk:pt-5"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          className={
+            'no-print shrink-0 px-4 pt-[calc(--spacing(3)+env(safe-area-inset-top))] select-none desk:px-7 desk:pt-5 ' +
+            (isDesktop ? '' : 'cursor-grab touch-none active:cursor-grabbing')
+          }
+          {...(isDesktop ? {} : dragHandlers)}
         >
           <div
-            className="mx-auto mb-3 h-1 w-9 rounded-full bg-muted transition-colors hover:bg-input-border"
+            className="mx-auto mb-3 h-1 w-9 rounded-full bg-muted desk:hidden"
             aria-hidden="true"
           />
           <div className="mb-4 flex items-center justify-between">
@@ -123,17 +151,30 @@ export function Sheet({
               className="cursor-pointer border-none bg-none p-1 text-muted-fg hover:text-fg"
               onClick={onClose}
               onPointerDown={(e) => e.stopPropagation()}
-              aria-label="Close"
+              aria-label="Zapri"
             >
               <CloseIcon className="size-5" />
             </button>
           </div>
         </div>
 
-        {/* The only scroller, so its scrollbar never crosses the rounded corners. */}
-        <div className="sheet-body min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(--spacing(5)+env(safe-area-inset-bottom))] desk:px-7 desk:pb-7">
+        {/* The only scroller, so its scrollbar never crosses the panel edge. */}
+        <div
+          className={
+            'sheet-body min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 desk:px-7 ' +
+            (footer
+              ? 'pb-4'
+              : 'pb-[calc(--spacing(6)+env(safe-area-inset-bottom))] desk:pb-7')
+          }
+        >
           {children}
         </div>
+
+        {footer && (
+          <div className="no-print shrink-0 bg-card px-4 pt-2 pb-[calc(--spacing(4)+env(safe-area-inset-bottom))] desk:px-7 desk:pt-2 desk:pb-6">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -143,11 +184,14 @@ export function Field({
   label,
   htmlFor,
   hint,
+  error,
   children,
 }: {
   label: ReactNode;
   htmlFor?: string;
   hint?: ReactNode;
+  /** Replaces the hint while present — one message at a time. */
+  error?: string;
   children: ReactNode;
 }) {
   return (
@@ -156,7 +200,13 @@ export function Field({
         {label}
       </label>
       {children}
-      {hint ? <div className={`${hintCx} mt-1.5`}>{hint}</div> : null}
+      {error ? (
+        <div className="mt-1.5 text-xs text-error-fg" role="alert">
+          {error}
+        </div>
+      ) : hint ? (
+        <div className={`${hintCx} mt-1.5`}>{hint}</div>
+      ) : null}
     </div>
   );
 }

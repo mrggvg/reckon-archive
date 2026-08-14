@@ -6,6 +6,9 @@ import { uid } from '../lib/storage';
 import type { Session } from '../lib/types';
 import { useStore } from '../store/context';
 import { btn, btnBlock, hint, input, row2 } from '../styles/cx';
+import { Select } from '../components/Select';
+import { DateField } from '../components/DateField';
+import { TimeField } from '../components/TimeField';
 
 export function EntrySheet({
   editing,
@@ -27,7 +30,7 @@ export function EntrySheet({
 
   const save = () => {
     if (!clientId || !date || !start || !end) {
-      toast('Fill in client, date and times');
+      toast('Izpolnite stranko, datum in čas');
       return;
     }
     update((d) => {
@@ -47,80 +50,73 @@ export function EntrySheet({
         });
       }
     });
-    toast('Entry saved');
+    toast('Vnos shranjen');
     onClose();
   };
 
   if (data.clients.length === 0) {
     return (
-      <Sheet title="Log hours" onClose={onClose}>
-        <p className={hint}>Add a client first — hours are always logged against one.</p>
+      <Sheet title="Vnesi ure" onClose={onClose}>
+        <p className={hint}>Najprej dodajte stranko — ure se vedno beležijo nanjo.</p>
       </Sheet>
     );
   }
 
   return (
-    <Sheet title={editing ? 'Edit entry' : 'Log hours'} onClose={onClose}>
-      <Field label="Client" htmlFor="entryClient">
-        <select
+    <Sheet
+      title={editing ? 'Uredi vnos' : 'Vnesi ure'}
+      onClose={onClose}
+      footer={
+        <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
+          Shrani vnos
+        </button>
+      }
+    >
+      <Field label="Stranka" htmlFor="entryClient">
+        <Select
           id="entryClient"
-          className={input}
           value={clientId}
-          onChange={(e) => setClientId(e.target.value)}
-        >
-          {data.clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onChange={setClientId}
+          options={data.clients.map((c) => ({ value: c.id, label: c.name }))}
+        />
       </Field>
 
-      <Field label="Date" htmlFor="entryDate">
-        <input
+      <Field label="Datum" htmlFor="entryDate">
+        <DateField
           id="entryDate"
-          className={input}
-          type="date"
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={setDate}
         />
       </Field>
 
       <div className={row2}>
-        <Field label="In" htmlFor="entryStart">
-          <input
-            id="entryStart"
-            className={input}
-            type="time"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-          />
+        <Field label="Začetek" htmlFor="entryStart">
+          <TimeField id="entryStart" value={start} onChange={setStart} />
         </Field>
-        <Field label="Out" htmlFor="entryEnd">
-          <input
-            id="entryEnd"
-            className={input}
-            type="time"
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
-          />
+        <Field label="Konec" htmlFor="entryEnd">
+          <TimeField id="entryEnd" value={end} onChange={setEnd} />
         </Field>
       </div>
 
-      <Field label="Position / what you worked on" htmlFor="entryNote">
+      <Field
+        label={
+          <>
+            Opomba <span className="font-normal text-muted-fg">(neobvezno)</span>
+          </>
+        }
+        htmlFor="entryNote"
+        hint="Karkoli si želite zapomniti — delovno mesto, lokacija, opravilo. Izpiše se na delovnem listu."
+      >
         <input
           id="entryNote"
           className={input}
           type="text"
-          placeholder="e.g. backend integration"
+          placeholder="npr. reševanje iz vode, Žusterna"
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
       </Field>
 
-      <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
-        Save entry
-      </button>
     </Sheet>
   );
 }

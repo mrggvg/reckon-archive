@@ -1,11 +1,16 @@
+/**
+ * Slovenian money: 1.820,00 € — dot for thousands, comma for decimals.
+ *
+ * `useGrouping: 'always'` is deliberate. Slovenian CLDR only groups from five
+ * digits up in running text, but financial documents group from four, and this
+ * app is nothing but financial documents.
+ */
 export function fmtMoney(n: number): string {
-  return (
-    '€' +
-    (Math.round(n * 100) / 100).toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })
-  );
+  return (Math.round(n * 100) / 100).toLocaleString('sl-SI', {
+    style: 'currency',
+    currency: 'EUR',
+    useGrouping: 'always',
+  });
 }
 
 /** Duration in hours between two HH:mm times, wrapping past midnight. */
@@ -20,22 +25,93 @@ export function hoursBetween(start: string, end: string): number {
 export function fmtHours(h: number): string {
   const hh = Math.floor(h);
   const mm = Math.round((h - hh) * 60);
-  return mm ? `${hh}h ${mm}m` : `${hh}h`;
+  return mm ? `${hh} h ${mm} min` : `${hh} h`;
 }
 
-/** Tight form for dense spots like calendar cells: "8h", "7.5h". */
+/** Tight form for dense spots like calendar cells: "8 h", "7,5 h". */
 export function fmtHoursCompact(h: number): string {
-  return `${Math.round(h * 10) / 10}h`;
+  return `${(Math.round(h * 10) / 10).toLocaleString('sl-SI')} h`;
 }
 
-/** "Mon, 3 Aug" */
+/** "sre, 3. avg." */
 export function fmtDateLabel(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-GB', {
+  return d.toLocaleDateString('sl-SI', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
   });
+}
+
+/** ISO yyyy-mm-dd -> dd.mm.yyyy, or '' when there's no date yet. */
+export function isoToDmy(iso: string): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}.${m}.${y}`;
+}
+
+/**
+ * dd.mm.yyyy -> ISO, or null if it isn't a real date. Round-tripping through
+ * Date catches 31.02.2026, which a regex alone would wave through.
+ */
+export function dmyToIso(text: string): string | null {
+  const m = /^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/.exec(text.trim());
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const year = Number(m[3]);
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return isoOf(date);
+}
+
+/** Digits typed by a person -> HH:mm as they go. */
+export function maskTime(raw: string): string {
+  const d = raw.replace(/\D/g, '').slice(0, 4);
+  if (d.length <= 2) return d;
+  return `${d.slice(0, 2)}:${d.slice(2)}`;
+}
+
+/** True for a real 24-hour time. */
+export function isValidTime(text: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(text.trim());
+}
+
+/**
+ * What a person half-typed -> HH:mm. "9" is 09:00, "930" is 09:30 — the
+ * shapes people actually type into a time box.
+ */
+export function normaliseTime(text: string): string | null {
+  const digits = text.replace(/\D/g, '');
+  if (digits.length === 0) return null;
+  let hh: string;
+  let mm: string;
+  if (digits.length <= 2) {
+    hh = digits.padStart(2, '0');
+    mm = '00';
+  } else if (digits.length === 3) {
+    hh = ('0' + digits[0]).slice(-2);
+    mm = digits.slice(1);
+  } else {
+    hh = digits.slice(0, 2);
+    mm = digits.slice(2, 4);
+  }
+  const value = `${hh}:${mm}`;
+  return isValidTime(value) ? value : null;
+}
+
+/** Digits typed by a person -> dd.mm.yyyy as they go. */
+export function maskDmy(raw: string): string {
+  const d = raw.replace(/\D/g, '').slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}.${d.slice(2)}`;
+  return `${d.slice(0, 2)}.${d.slice(2, 4)}.${d.slice(4)}`;
 }
 
 /** ISO yyyy-mm-dd -> dd.mm.yyyy */
@@ -69,19 +145,22 @@ export function addDaysIso(iso: string, days: number): string {
 }
 
 export const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
+  'Januar',
+  'Februar',
+  'Marec',
   'April',
-  'May',
-  'June',
-  'July',
-  'August',
+  'Maj',
+  'Junij',
+  'Julij',
+  'Avgust',
   'September',
-  'October',
+  'Oktober',
   'November',
   'December',
 ];
+
+/** Monday-first, as the Slovenian week runs. */
+export const WEEKDAY_NAMES = ['Pon', 'Tor', 'Sre', 'Čet', 'Pet', 'Sob', 'Ned'];
 
 const CLIENT_COLORS = [
   'oklch(0.5106 0.2301 276.97)',

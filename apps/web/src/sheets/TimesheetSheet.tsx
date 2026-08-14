@@ -11,8 +11,8 @@ export function TimesheetSheet({ id, onClose }: { id: string; onClose: () => voi
 
   if (!inv) {
     return (
-      <Sheet title="Working hours" onClose={onClose}>
-        <p className={hint}>That invoice no longer exists.</p>
+      <Sheet title="Delovni list" onClose={onClose}>
+        <p className={hint}>Ta račun ne obstaja več.</p>
       </Sheet>
     );
   }
@@ -26,49 +26,49 @@ export function TimesheetSheet({ id, onClose }: { id: string; onClose: () => voi
 
   const downloadCsv = () => {
     const rows: (string | number)[][] = [
-      ['Invoice', inv.number],
-      ['Client', client ? client.name : ''],
-      ['Period', `${inv.periodStart} to ${inv.periodEnd}`],
+      ['Račun', inv.number],
+      ['Stranka', client ? client.name : ''],
+      ['Obdobje', `${inv.periodStart} – ${inv.periodEnd}`],
       [],
-      ['Date', 'In', 'Out', 'Hours', 'Note'],
+      ['Datum', 'Začetek', 'Konec', 'Ur', 'Opis'],
     ];
     sessions.forEach((s) => {
       rows.push([s.date, s.start, s.end, hoursBetween(s.start, s.end).toFixed(2), s.note]);
     });
     rows.push([]);
-    rows.push(['Total hours', totalHours.toFixed(2)]);
+    rows.push(['Skupaj ur', totalHours.toFixed(2)]);
     downloadBlob(
       toCsv(rows),
       `hours-${inv.number.replace('/', '-')}.csv`,
       'text/csv;charset=utf-8;',
     );
-    toast('Timesheet downloaded');
+    toast('Delovni list prenesen');
   };
 
   return (
-    <Sheet title="Working hours" onClose={onClose} printable>
+    <Sheet title="Delovni list" onClose={onClose} printable>
       <div className="ts-doc">
         <div className="ts-doc-head">
           <div>
-            <div className="ts-doc-label">Delovni list · Working hours</div>
-            <div className="ts-doc-title">{client ? client.name : 'Unassigned'}</div>
+            <div className="ts-doc-label">Delovni list</div>
+            <div className="ts-doc-title">{client ? client.name : 'Brez stranke'}</div>
           </div>
           <div className="ts-doc-ref">
-            <div className="k">Ref. invoice</div>
+            <div className="k">Račun št.</div>
             <div className="v font-mono">#{inv.number}</div>
           </div>
         </div>
 
         <div className="ts-doc-sub">
           <div>
-            <span className="k">Contractor</span> {data.profile.name || '—'}
+            <span className="k">Izvajalec</span> {data.profile.name || '—'}
           </div>
           <div>
-            <span className="k">Client</span> {client ? client.name : '—'}
+            <span className="k">Naročnik</span> {client ? client.name : '—'}
             {client?.taxNumber ? ' · Davčna št. ' + client.taxNumber : ''}
           </div>
           <div>
-            <span className="k">Period</span> {fmtDMY(inv.periodStart)} –{' '}
+            <span className="k">Obdobje</span> {fmtDMY(inv.periodStart)} –{' '}
             {fmtDMY(inv.periodEnd)}
           </div>
         </div>
@@ -77,11 +77,11 @@ export function TimesheetSheet({ id, onClose }: { id: string; onClose: () => voi
           <thead>
             <tr>
               <th>#</th>
-              <th>Date</th>
-              <th>In</th>
-              <th>Out</th>
-              <th>Hours</th>
-              <th>Note</th>
+              <th>Datum</th>
+              <th>Začetek</th>
+              <th>Konec</th>
+              <th>Ur</th>
+              <th>Opis</th>
             </tr>
           </thead>
           <tbody>
@@ -91,7 +91,7 @@ export function TimesheetSheet({ id, onClose }: { id: string; onClose: () => voi
                   colSpan={6}
                   style={{ color: 'var(--muted-fg)', textAlign: 'center', padding: 16 }}
                 >
-                  No sessions on this invoice — probably an imported/manual invoice.
+                  Na tem računu ni povezanih ur — najbrž je bil uvožen.
                 </td>
               </tr>
             ) : (
@@ -109,24 +109,24 @@ export function TimesheetSheet({ id, onClose }: { id: string; onClose: () => voi
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={4}>Total</td>
+              <td colSpan={4}>Skupaj</td>
               <td className="font-mono">{fmtHours(totalHours)}</td>
               <td />
             </tr>
           </tfoot>
         </table>
 
-        <div className="ts-doc-foot">Generated {fmtDMY(todayIso())} · Reckon</div>
+        <div className="ts-doc-foot">Izdelano {fmtDMY(todayIso())} · Reckon</div>
       </div>
 
       <div className="no-print mt-4 flex flex-wrap gap-2 [&>button]:flex-1 mt-4">
         <button className={btn.outline} onClick={() => window.print()}>
           <PrinterIcon className="size-3.5" />
-          Print / Save PDF
+          Natisni / PDF
         </button>
         <button className={btn.primary} onClick={downloadCsv}>
           <DownloadIcon className="size-3.5" />
-          Download CSV
+          Prenesi CSV
         </button>
       </div>
     </Sheet>

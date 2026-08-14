@@ -1,4 +1,5 @@
-import type { AppData, Profile } from './types';
+import { parseAddressLine } from '@reckon/shared';
+import type { AppData, Client, Profile } from './types';
 
 /** Pre-auth key, from when the app was single-user and browser-local. */
 const LEGACY_KEY = 'delovnik-data-v1';
@@ -13,16 +14,19 @@ export const DEFAULT_VAT_CLAUSE =
 
 export const emptyProfile: Profile = {
   name: '',
-  address: '',
+  street: '',
+  postalCode: '',
+  city: '',
   taxNumber: '',
   regNumber: '',
   iban: '',
+  accountHolder: '',
   taxRate: 4,
   vatPayer: 'NE',
   taxSystem: 'normiranec',
   monthlyContribution: 0,
   defaultDesc: '',
-  lastInvoiceNumber: '',
+  nextInvoiceNumber: '',
   placeOfIssue: '',
   vatClause: DEFAULT_VAT_CLAUSE,
 };
@@ -30,6 +34,7 @@ export const emptyProfile: Profile = {
 export function emptyData(): AppData {
   return {
     profile: { ...emptyProfile },
+    businesses: [],
     clients: [],
     sessions: [],
     invoices: [],
@@ -44,13 +49,46 @@ export function normalize(raw: unknown): AppData {
   if (!raw || typeof raw !== 'object') return base;
   const d = raw as Partial<AppData>;
   return {
-    profile: { ...base.profile, ...(d.profile ?? {}) },
-    clients: d.clients ?? [],
+    profile: migrateProfile({ ...base.profile, ...(d.profile ?? {}) }),
+    businesses: d.businesses ?? [],
+    clients: (d.clients ?? []).map(migrateClient),
     sessions: d.sessions ?? [],
     invoices: d.invoices ?? [],
     taxPayments: d.taxPayments ?? [],
     taxAssessments: d.taxAssessments ?? [],
   };
+}
+
+/** Profiles saved before the address was split still carry a single line. */
+function migrateProfile(
+  p: Profile & { address?: string; lastInvoiceNumber?: string },
+): Profile {
+  let out = p;
+
+  // The field used to hold the last number issued; it now holds the next one.
+  if (out.lastInvoiceNumber !== undefined) {
+    const { lastInvoiceNumber, ...rest } = out;
+    const parsed = /^(\d+)\s*\/\s*(\d{4})$/.exec(lastInvoiceNumber.trim());
+    out = {
+      ...rest,
+      nextInvoiceNumber:
+        out.nextInvoiceNumber ||
+        (parsed
+          ? `${String(Number(parsed[1]) + 1).padStart(3, '0')}/${parsed[2]}`
+          : ''),
+    } as Profile & { address?: string };
+  }
+
+  if (!out.address) return out;
+  const { address, ...rest } = out;
+  return { ...rest, ...parseAddressLine(address) };
+}
+
+/** Clients saved before the address was split still carry a single line. */
+function migrateClient(c: Client & { address?: string }): Client {
+  if (c.street !== undefined) return c;
+  const { address, ...rest } = c;
+  return { ...rest, ...parseAddressLine(address ?? '') };
 }
 
 export function loadData(userId: string): AppData {

@@ -36,12 +36,14 @@ function upnControlSum(fields: string[]): string {
 export function buildUpnQrString(profile: Profile, invoice: Invoice): string | null {
   const iban = (profile.iban || '').replace(/\s+/g, '').toUpperCase();
   if (!/^[A-Z]{2}\d{2}[A-Z0-9]{4,30}$/.test(iban)) return null; // no usable IBAN
-  const name = (profile.name || '').trim();
+  // The bank checks the UPN against the account holder, so a personal account
+  // is paid in that person's name rather than the firma.
+  const name = (profile.accountHolder || profile.name || '').trim();
   if (!name) return null;
-  // split "Street 1, 1000 City" into street / city lines
-  const addrParts = (profile.address || '').split(',').map((s) => s.trim());
-  const street = (addrParts[0] || '').slice(0, 33);
-  const city = (addrParts.slice(1).join(', ') || '').slice(0, 33);
+  // The UPN form wants street and locality on separate lines, which is how
+  // the profile stores them.
+  const street = (profile.street || '').slice(0, 33);
+  const city = [profile.postalCode, profile.city].filter(Boolean).join(' ').slice(0, 33);
   const amountCents = Math.round(invoice.total * 100);
   if (!(amountCents > 0) || amountCents >= 1e11) return null;
   const purpose = `Racun ${invoice.number}`.slice(0, 42);

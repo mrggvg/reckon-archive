@@ -5,6 +5,8 @@ import { uid } from '../lib/storage';
 import type { TaxPaymentType } from '../lib/types';
 import { useStore } from '../store/context';
 import { btn, btnBlock, input, row2 } from '../styles/cx';
+import { Select } from '../components/Select';
+import { DateField } from '../components/DateField';
 
 export function TaxPaymentSheet({ onClose }: { onClose: () => void }) {
   const { update, toast } = useStore();
@@ -16,42 +18,48 @@ export function TaxPaymentSheet({ onClose }: { onClose: () => void }) {
   const save = () => {
     const value = parseFloat(amount);
     if (!date || isNaN(value) || value <= 0) {
-      toast('Enter a valid date and amount');
+      toast('Vnesite veljaven datum in znesek');
       return;
     }
     update((d) => {
       d.taxPayments.push({ id: uid('tp'), type, date, amount: value, note: note.trim() });
     });
-    toast('Payment logged');
+    toast('Plačilo zabeleženo');
     onClose();
   };
 
   return (
-    <Sheet title="Log a FURS payment" onClose={onClose}>
-      <Field label="Type" htmlFor="taxPayType">
-        <select
+    <Sheet
+      title="Plačilo FURS"
+      onClose={onClose}
+      footer={
+        <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
+          Shrani plačilo
+        </button>
+      }
+    >
+      <Field label="Vrsta" htmlFor="taxPayType">
+        <Select
           id="taxPayType"
-          className={input}
           value={type}
-          onChange={(e) => setType(e.target.value as TaxPaymentType)}
-        >
-          <option value="dohodnina">Akontacija dohodnine</option>
-          <option value="prispevki">Prispevki (social security)</option>
-          <option value="drugo">Other</option>
-        </select>
+          onChange={(v) => setType(v as TaxPaymentType)}
+          options={[
+            { value: 'dohodnina', label: 'Akontacija dohodnine' },
+            { value: 'prispevki', label: 'Prispevki' },
+            { value: 'drugo', label: 'Drugo' },
+          ]}
+        />
       </Field>
 
       <div className={row2}>
-        <Field label="Date paid" htmlFor="taxPayDate">
-          <input
-            id="taxPayDate"
-            className={input}
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+        <Field label="Datum plačila" htmlFor="taxPayDate">
+          <DateField
+          id="taxPayDate"
+          value={date}
+          onChange={setDate}
+        />
         </Field>
-        <Field label="Amount (EUR)" htmlFor="taxPayAmount">
+        <Field label="Znesek (EUR)" htmlFor="taxPayAmount">
           <input
             id="taxPayAmount"
             className={input}
@@ -64,20 +72,17 @@ export function TaxPaymentSheet({ onClose }: { onClose: () => void }) {
         </Field>
       </div>
 
-      <Field label="Note (optional)" htmlFor="taxPayNote">
+      <Field label="Opomba (neobvezno)" htmlFor="taxPayNote">
         <input
           id="taxPayNote"
           className={input}
           type="text"
-          placeholder="e.g. January akontacija"
+          placeholder="npr. akontacija januar"
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
       </Field>
 
-      <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
-        Save payment
-      </button>
     </Sheet>
   );
 }

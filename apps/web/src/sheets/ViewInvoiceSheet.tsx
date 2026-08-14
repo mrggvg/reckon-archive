@@ -22,8 +22,8 @@ export function ViewInvoiceSheet({
 
   if (!inv) {
     return (
-      <Sheet title="Invoice" onClose={onClose}>
-        <p className={hint}>That invoice no longer exists.</p>
+      <Sheet title="Račun" onClose={onClose}>
+        <p className={hint}>Ta račun ne obstaja več.</p>
       </Sheet>
     );
   }
@@ -38,11 +38,11 @@ export function ViewInvoiceSheet({
       target.status = nowPaid ? 'paid' : 'unpaid';
       target.paidDate = nowPaid ? todayIso() : null;
     });
-    toast(nowPaid ? 'Marked as paid' : 'Marked as unpaid');
+    toast(nowPaid ? 'Označeno kot plačano' : 'Označeno kot neplačano');
   };
 
   const remove = () => {
-    if (!confirm('Delete this invoice? Its hours will become unbilled again.')) return;
+    if (!confirm('Izbrišem ta račun? Njegove ure bodo spet neobračunane.')) return;
     update((d) => {
       d.sessions.forEach((s) => {
         if (s.invoiceId === id) {
@@ -52,21 +52,21 @@ export function ViewInvoiceSheet({
       });
       d.invoices = d.invoices.filter((i) => i.id !== id);
     });
-    toast('Invoice deleted');
+    toast('Račun izbrisan');
     onClose();
   };
 
   return (
-    <Sheet title="Invoice" onClose={onClose} printable>
+    <Sheet title="Račun" onClose={onClose} printable>
       <Receipt invoice={inv} client={client} profile={data.profile} />
 
       <div className="no-print mt-4 flex flex-wrap gap-2 [&>button]:flex-1 mt-4">
         <button className={btn.primary} onClick={togglePaid}>
-          {inv.status === 'paid' ? 'Mark as unpaid' : 'Mark as paid'}
+          {inv.status === 'paid' ? 'Označi kot neplačano' : 'Označi kot plačano'}
         </button>
         <button className={`${btn.destructive} grow-0`} onClick={remove}>
           <TrashIcon className="size-3.5" />
-          Delete
+          Izbriši
         </button>
       </div>
 
@@ -76,11 +76,11 @@ export function ViewInvoiceSheet({
           onClick={() => openSheet({ kind: 'timesheet', id })}
         >
           <ListIcon className="size-3.5" />
-          View hours
+          Delovni list
         </button>
         <button className={btn.outline} onClick={() => window.print()}>
           <PrinterIcon className="size-3.5" />
-          Print / Save PDF
+          Natisni / PDF
         </button>
       </div>
 
@@ -89,7 +89,7 @@ export function ViewInvoiceSheet({
         onClick={() => replaceSheet({ kind: 'editInvoice', id })}
       >
         <EditIcon className="size-3.5" />
-        Edit invoice details
+        Uredi podatke računa
       </button>
     </Sheet>
   );

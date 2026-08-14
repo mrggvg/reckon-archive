@@ -1,4 +1,5 @@
-import { fmtDMY, fmtHours, fmtMoney } from '../lib/format';
+import { formatAddress } from '@reckon/shared';
+import { fmtDMY, fmtMoney } from '../lib/format';
 import { invoiceStatusComputed } from '../lib/invoice';
 import { buildUpnQr } from '../lib/upn';
 import type { Client, Invoice, Profile } from '../lib/types';
@@ -31,6 +32,7 @@ export function Receipt({
           <h2>RAČUN</h2>
         </div>
         <div className="num-block">
+          <div className="issuer-mark">Reckon</div>
           <div className="num-label">Številka</div>
           <div className="num">{invoice.number}</div>
         </div>
@@ -41,7 +43,7 @@ export function Receipt({
           <div className="party">
             <div className="label">Izvajalec</div>
             <div className="party-name">{profile.name || '—'}</div>
-            <div className="party-line">{profile.address}</div>
+            <div className="party-line">{formatAddress(profile)}</div>
             <div className="party-line">
               <span className="k">Davčna številka:</span> {profile.taxNumber || '—'}
             </div>
@@ -60,7 +62,7 @@ export function Receipt({
           <div className="party">
             <div className="label">Naročnik</div>
             <div className="party-name">{client ? client.name : '—'}</div>
-            <div className="party-line">{client ? client.address : ''}</div>
+            <div className="party-line">{client ? formatAddress(client) : ''}</div>
             <div className="party-line">
               <span className="k">Davčna številka:</span>{' '}
               {client ? client.taxNumber || '—' : '—'}
@@ -92,18 +94,6 @@ export function Receipt({
             <span className="k">Datum opravljene storitve</span>
             <span className="v">{periodLabel}</span>
           </div>
-          {invoice.totalHours != null ? (
-            <div className="row">
-              <span className="k">Skupaj ur</span>
-              <span className="v">{fmtHours(invoice.totalHours)}</span>
-            </div>
-          ) : null}
-          {invoice.rate != null ? (
-            <div className="row">
-              <span className="k">Cena / h</span>
-              <span className="v">{fmtMoney(invoice.rate)}</span>
-            </div>
-          ) : null}
         </div>
 
         <div className="receipt-total-band">
@@ -124,6 +114,12 @@ export function Receipt({
             <span className="label">Plačilo na TRR</span>
             <span className="val">{profile.iban || '—'}</span>
           </div>
+          {profile.accountHolder && profile.accountHolder !== profile.name ? (
+            <div className="row">
+              <span className="label">Imetnik računa</span>
+              <span className="val">{profile.accountHolder}</span>
+            </div>
+          ) : null}
         </div>
 
         {qr ? (

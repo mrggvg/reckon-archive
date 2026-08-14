@@ -1,4 +1,5 @@
 import { ClientsIcon, EditIcon, PlusIcon, TrashIcon } from '../components/icons';
+import { formatAddress } from '@reckon/shared';
 import { EmptyState, SectionHead } from '../components/ui';
 import { btn, btnSm, iconBtn, rowActions } from '../styles/cx';
 import { fmtMoney } from '../lib/format';
@@ -10,32 +11,32 @@ export function ClientsView({ openSheet }: { openSheet: OpenSheet }) {
 
   const remove = (id: string) => {
     if (
-      !confirm('Delete this client? Logged hours for them will stay but become unassigned.')
+      !confirm('Izbrišem to stranko? Zabeležene ure ostanejo, a bodo brez stranke.')
     ) {
       return;
     }
     update((d) => {
       d.clients = d.clients.filter((c) => c.id !== id);
     });
-    toast('Client deleted');
+    toast('Stranka izbrisana');
   };
 
   return (
     <>
-      <SectionHead title="Clients" count={data.clients.length}>
+      <SectionHead title="Stranke" count={data.clients.length}>
         <button
           className={`${btn.primary} ${btnSm} max-desk:hidden`}
           onClick={() => openSheet({ kind: 'client' })}
         >
           <PlusIcon className="size-3.5" />
-          New client
+          Nova stranka
         </button>
       </SectionHead>
 
       {data.clients.length === 0 ? (
         <EmptyState
           icon={<ClientsIcon className="size-8" />}
-          lines={['No clients yet.', 'Add the company that hires you as a subcontractor.']}
+          lines={['Ni vnesenih strank.', 'Dodajte podjetje, za katerega opravljate storitve.']}
         />
       ) : (
         data.clients.map((c) => (
@@ -45,9 +46,11 @@ export function ClientsView({ openSheet }: { openSheet: OpenSheet }) {
           >
             <div>
               <div className="text-base font-semibold">{c.name}</div>
-              <div className="mt-0.5 text-sm text-muted-fg">{c.address || 'No address on file'}</div>
+              <div className="mt-0.5 text-sm text-muted-fg">
+                {formatAddress(c) || 'Naslov ni vnesen'}
+              </div>
               <div className="mt-1 font-mono text-xs text-muted-fg">
-                {c.taxNumber || 'no tax no.'}
+                {c.taxNumber || 'brez davčne št.'}
                 {c.email ? ' · ' + c.email : ''}
                 {c.phone ? ' · ' + c.phone : ''}
               </div>
@@ -57,14 +60,14 @@ export function ClientsView({ openSheet }: { openSheet: OpenSheet }) {
               <button
                 className={iconBtn}
                 onClick={() => openSheet({ kind: 'client', editing: c })}
-                aria-label="Edit client"
+                aria-label="Uredi stranko"
               >
                 <EditIcon className="size-4" />
               </button>
               <button
                 className={iconBtn}
                 onClick={() => remove(c.id)}
-                aria-label="Delete client"
+                aria-label="Izbriši stranko"
               >
                 <TrashIcon className="size-4" />
               </button>

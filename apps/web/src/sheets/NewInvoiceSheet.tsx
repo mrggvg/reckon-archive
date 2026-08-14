@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { invoiceReadiness } from '@reckon/shared';
+import { ProfileRequired } from '../components/ProfileRequired';
 import { Field, Sheet } from '../components/ui';
 import {
   addDaysIso,
@@ -11,13 +13,18 @@ import { nextInvoiceNumber } from '../lib/invoice';
 import { uid } from '../lib/storage';
 import { useStore } from '../store/context';
 import { btn, btnBlock, field, hint, input, label, row2 } from '../styles/cx';
+import { Select } from '../components/Select';
+import { DateField } from '../components/DateField';
+import type { OpenSheet } from '../lib/sheets';
 
 export function NewInvoiceSheet({
   clientId: initialClientId,
   onClose,
+  replaceSheet,
 }: {
   clientId?: string;
   onClose: () => void;
+  replaceSheet?: OpenSheet;
 }) {
   const { data, update, toast } = useStore();
   const [clientId, setClientId] = useState(
@@ -55,7 +62,7 @@ export function NewInvoiceSheet({
     const dates = records.map((r) => r.date).sort();
     const number = nextInvoiceNumber(
       data.invoices,
-      data.profile.lastInvoiceNumber,
+      data.profile.nextInvoiceNumber,
       issueDate,
     );
     const id = uid('inv');
@@ -85,45 +92,67 @@ export function NewInvoiceSheet({
         }
       });
     });
-    toast('Invoice ' + number + ' created');
+    toast('Račun ' + number + ' ustvarjen');
     onClose();
   };
 
+  const readiness = invoiceReadiness(data.profile);
+  if (!readiness.ready) {
+    return (
+      <Sheet title="Nov račun" onClose={onClose}>
+        <ProfileRequired
+          missing={readiness.missing}
+          onOpenProfile={() => replaceSheet?.({ kind: 'profile' })}
+        />
+      </Sheet>
+    );
+  }
+
   if (data.clients.length === 0) {
     return (
-      <Sheet title="New invoice" onClose={onClose}>
-        <p className={hint}>Add a client first.</p>
+      <Sheet title="Nov račun" onClose={onClose}>
+        <p className={hint}>Najprej dodajte stranko.</p>
       </Sheet>
     );
   }
 
   return (
-    <Sheet title="New invoice" onClose={onClose}>
-      <Field label="Client" htmlFor="invClient">
-        <select
+    <Sheet
+      title="Nov račun"
+      onClose={onClose}
+      footer={
+        <button
+          className={`${btn.primary} ${btnBlock}`}
+          disabled={checkedIds.length === 0}
+          onClick={generate}
+        >
+          Ustvari račun
+        </button>
+      }
+    >
+      <Field label="Stranka" htmlFor="invClient">
+        <Select
           id="invClient"
-          className={input}
           value={clientId}
-          onChange={(e) => {
-            setClientId(e.target.value);
+          onChange={(v) => {
+            setClientId(v);
             setUnchecked([]);
           }}
-        >
-          {data.clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          options={data.clients.map((c) => ({
+            value: c.id,
+            label: c.name,
+            hint: `${fmtMoney(c.rate)}/h`,
+          }))}
+        />
       </Field>
 
       {candidates.length === 0 ? (
         <p className={`${hint} mb-4`}>
-          No unbilled hours logged for this client yet.
+          Za to stranko ni neobračunanih ur.
         </p>
       ) : (
         <div className={field}>
-          <span className={label}>Unbilled sessions</span>
+          <span className={label}>Neobračunane ure</span>
           <div className="flex flex-col gap-2">
             {candidates.map((s) => (
               <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2.5" key={s.id}>
@@ -143,45 +172,34 @@ export function NewInvoiceSheet({
         </div>
       )}
 
-      <Field label="Service description" htmlFor="invDesc">
+      <Field label="Opis storitve" htmlFor="invDesc">
         <input
           id="invDesc"
           className={input}
           type="text"
-          placeholder="e.g. Reševanje iz vode"
+          placeholder="npr. Reševanje iz vode"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
       </Field>
 
       <div className={row2}>
-        <Field label="Issue date" htmlFor="invDate">
-          <input
-            id="invDate"
-            className={input}
-            type="date"
-            value={issueDate}
-            onChange={(e) => setIssueDate(e.target.value)}
-          />
+        <Field label="Datum izdaje" htmlFor="invDate">
+          <DateField
+          id="invDate"
+          value={issueDate}
+          onChange={setIssueDate}
+        />
         </Field>
-        <Field label="Due date" htmlFor="invDue">
-          <input
-            id="invDue"
-            className={input}
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-          />
+        <Field label="Rok plačila" htmlFor="invDue">
+          <DateField
+          id="invDue"
+          value={dueDate}
+          onChange={setDueDate}
+        />
         </Field>
       </div>
 
-      <button
-        className={`${btn.primary} ${btnBlock}`}
-        disabled={checkedIds.length === 0}
-        onClick={generate}
-      >
-        Generate invoice
-      </button>
     </Sheet>
   );
 }

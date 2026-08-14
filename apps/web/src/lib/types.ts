@@ -1,15 +1,23 @@
+import type { Business } from '@reckon/shared';
+
 export interface Profile {
   name: string;
-  address: string;
+  /** Address kept in parts; joined with formatAddress() for printing. */
+  street: string;
+  postalCode: string;
+  city: string;
   taxNumber: string;
   regNumber: string;
   iban: string;
+  /** Name on the account, when it isn't the same as the issuer's. */
+  accountHolder: string;
   taxRate: number;
   vatPayer: 'DA' | 'NE';
   taxSystem: 'normiranec' | 'dejanski';
   monthlyContribution: number;
   defaultDesc: string;
-  lastInvoiceNumber: string;
+  /** The number the next invoice will carry, e.g. 003/2026. */
+  nextInvoiceNumber: string;
   placeOfIssue: string;
   vatClause: string;
 }
@@ -17,7 +25,10 @@ export interface Profile {
 export interface Client {
   id: string;
   name: string;
-  address: string;
+  /** Address kept in parts; joined with formatAddress() for printing. */
+  street: string;
+  postalCode: string;
+  city: string;
   taxNumber: string;
   rate: number;
   email: string;
@@ -73,6 +84,8 @@ export interface TaxAssessment {
 
 export interface AppData {
   profile: Profile;
+  /** Registration periods, oldest first. The last open one is the active s.p. */
+  businesses: Business[];
   clients: Client[];
   sessions: Session[];
   invoices: Invoice[];

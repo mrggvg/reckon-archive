@@ -17,7 +17,7 @@ import {
   todayIso,
 } from '../lib/format';
 import type { OpenSheet } from '../lib/sheets';
-import { sessionBillingLabel } from '../lib/invoice';
+import { BILLING_LABEL, sessionBillingLabel } from '../lib/invoice';
 import { uid } from '../lib/storage';
 import { btn, btnSm, chip, iconBtn, rowActions, tabSeg } from '../styles/cx';
 import type { Session } from '../lib/types';
@@ -30,7 +30,7 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
   const [filter, setFilter] = useState<string>('all');
 
   const clientName = (id: string) =>
-    data.clients.find((c) => c.id === id)?.name ?? 'Unassigned';
+    data.clients.find((c) => c.id === id)?.name ?? 'Brez stranke';
 
   // The filtered-on client may have been deleted since — fall back to All.
   const activeFilter =
@@ -67,7 +67,7 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
   const deleteEntry = (id: string) => {
     const s = data.sessions.find((x) => x.id === id);
     if (s?.invoiced) {
-      toast("Can't delete — already on an invoice");
+      toast('Vnosa ni mogoče izbrisati — je že na računu');
       return;
     }
     update((d) => {
@@ -90,7 +90,7 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
         s.end === last.end,
     );
     if (dupe) {
-      toast('Already logged that for today');
+      toast('Ta vnos za danes že obstaja');
       return;
     }
     update((d) => {
@@ -105,49 +105,49 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
         invoiceId: null,
       });
     });
-    toast('Entry repeated for today');
+    toast('Vnos ponovljen za danes');
   };
 
   return (
     <>
       <SectionHead
-        title="Hours"
-        count={`${visible.length} ${visible.length === 1 ? 'entry' : 'entries'}`}
+        title="Ure"
+        count={`${visible.length} ${visible.length === 1 ? 'vnos' : 'vnosov'}`}
       >
         <button
           className={`${btn.primary} ${btnSm} max-desk:hidden`}
           onClick={() => openSheet({ kind: 'entry' })}
         >
           <PlusIcon className="size-3.5" />
-          Log hours
+          Vnesi ure
         </button>
       </SectionHead>
 
       {data.sessions.length > 0 && (
-        <div className="mb-4 flex items-stretch gap-2">
+        <div className="mb-3 flex items-stretch gap-2">
           <button className={`${btn.outline} ${btnSm}`} onClick={repeatLast}>
             <RepeatIcon className="size-3.5" />
-            Repeat last entry
+            Ponovi zadnji vnos
           </button>
         </div>
       )}
 
-      <div className="mb-4 flex gap-0.5 rounded-lg bg-muted p-1">
+      <div className="mb-3 flex gap-0.5 rounded-lg bg-muted p-1">
         <button className={tabSeg(view === 'list')} onClick={() => setView('list')}>
           <ListIcon className="size-3.5" />
-          List
+          Seznam
         </button>
         <button className={tabSeg(view === 'calendar')} onClick={() => setView('calendar')}>
           <CalendarIcon className="size-3.5" />
-          Calendar
+          Koledar
         </button>
       </div>
 
       {view === 'list' ? (
         <>
-          <div className="mb-3 flex gap-2 overflow-x-auto pb-1.5 [scrollbar-width:none]">
+          <div className="mb-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
             <button className={chip(activeFilter === 'all')} onClick={() => setFilter('all')}>
-              All
+              Vse
             </button>
             {data.clients.map((c) => (
               <button
@@ -163,28 +163,28 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
           {data.sessions.length === 0 ? (
             <EmptyState
               icon={<ClockIcon className="size-8" />}
-              lines={['No hours logged yet.', 'Tap + to punch in your first entry.']}
+              lines={['Ni zabeleženih ur.', 'Dodajte prvi vnos z gumbom +.']}
             />
           ) : visible.length === 0 ? (
             <EmptyState
               icon={<ClockIcon className="size-8" />}
-              lines={['No hours for this client yet.']}
+              lines={['Za to stranko še ni zabeleženih ur.']}
             />
           ) : (
             <>
-              <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-muted px-3.5 py-2.5 text-xs text-muted-fg">
+              <div className="mb-3 flex items-center justify-between rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-fg">
                 <div className="flex gap-5">
                   <div>
                     <span className="font-mono text-sm font-bold text-fg">
                       {fmtHours(totalHours)}
                     </span>{' '}
-                    total
+                    skupaj
                   </div>
                   <div>
                     <span className="font-mono text-sm font-bold text-fg">
                       {fmtHours(unbilledHours)}
                     </span>{' '}
-                    unbilled
+                    neobračunano
                   </div>
                 </div>
               </div>
@@ -257,7 +257,7 @@ export function PunchRow({
             <>
               {' · '}
               <span className={billing === 'paid' ? 'font-semibold text-secondary' : ''}>
-                {billing}
+                {BILLING_LABEL[billing]}
               </span>
             </>
           ) : null}
@@ -269,10 +269,10 @@ export function PunchRow({
         {session.end}
       </div>
       <div className={rowActions}>
-        <button className={`${iconBtn} size-7`} onClick={onEdit} aria-label="Edit entry">
+        <button className={`${iconBtn} size-7`} onClick={onEdit} aria-label="Uredi vnos">
           <EditIcon className="size-3.5" />
         </button>
-        <button className={`${iconBtn} size-7`} onClick={onDelete} aria-label="Delete entry">
+        <button className={`${iconBtn} size-7`} onClick={onDelete} aria-label="Izbriši vnos">
           <TrashIcon className="size-3.5" />
         </button>
       </div>

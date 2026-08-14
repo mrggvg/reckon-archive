@@ -7,8 +7,8 @@ import { validateBody } from '../../middleware/validate.js';
 import { authService } from './auth.service.js';
 
 const credentials = z.object({
-  email: z.email('Enter a valid email address').trim().toLowerCase(),
-  password: z.string().min(8, 'Use at least 8 characters'),
+  email: z.email('Vnesite veljaven e-poštni naslov').trim().toLowerCase(),
+  password: z.string().min(8, 'Uporabite vsaj 8 znakov'),
 });
 
 /** Issues a fresh session id, so a pre-login cookie can't be replayed. */

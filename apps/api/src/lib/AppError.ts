@@ -9,13 +9,13 @@ export class AppError extends Error {
 }
 
 export class UnauthorizedError extends AppError {
-  constructor(msg = 'Authentication required') {
+  constructor(msg = 'Potrebna je prijava') {
     super(401, msg);
   }
 }
 
 export class NotFoundError extends AppError {
-  constructor(msg = 'Not found') {
+  constructor(msg = 'Ni najdeno') {
     super(404, msg);
   }
 }
@@ -28,6 +28,6 @@ export class ConflictError extends AppError {
 
 export class ValidationError extends AppError {
   constructor(fields: Record<string, string>) {
-    super(422, 'Validation failed', fields);
+    super(422, 'Preverite vnesene podatke', fields);
   }
 }

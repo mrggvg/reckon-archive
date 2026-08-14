@@ -26,7 +26,7 @@ export function DayDetailSheet({
   const deleteEntry = (id: string) => {
     const s = data.sessions.find((x) => x.id === id);
     if (s?.invoiced) {
-      toast("Can't delete — already on an invoice");
+      toast('Vnosa ni mogoče izbrisati — je že na računu');
       return;
     }
     update((d) => {
@@ -35,40 +35,45 @@ export function DayDetailSheet({
   };
 
   return (
-    <Sheet title={fmtDateLabel(date)} onClose={onClose}>
+    <Sheet
+      title={fmtDateLabel(date)}
+      onClose={onClose}
+      footer={
+        <button
+          className={`${btn.outline} ${btnBlock}`}
+          onClick={() => {
+            if (data.clients.length === 0) {
+              toast('Najprej dodajte stranko');
+              return;
+            }
+            replaceSheet({ kind: 'entry', prefill: { date } });
+          }}
+        >
+          <PlusIcon className="size-3.5" />
+          Dodaj vnos za ta dan
+        </button>
+      }
+    >
       {sessions.length > 0 && (
         <div className={`${hint} mb-3`}>
-          {fmtHours(total)} total
+          {fmtHours(total)} skupaj
         </div>
       )}
 
       {sessions.length === 0 ? (
-        <div className={emptyInline}>No entries this day.</div>
+        <div className={emptyInline}>Ta dan ni vnosov.</div>
       ) : (
         sessions.map((s) => (
           <PunchRow
             key={s.id}
             session={s}
-            clientName={data.clients.find((c) => c.id === s.clientId)?.name ?? 'Unassigned'}
+            clientName={data.clients.find((c) => c.id === s.clientId)?.name ?? 'Brez stranke'}
             onEdit={() => replaceSheet({ kind: 'entry', editing: s })}
             onDelete={() => deleteEntry(s.id)}
           />
         ))
       )}
 
-      <button
-        className={`${btn.outline} ${btnBlock}`}
-        onClick={() => {
-          if (data.clients.length === 0) {
-            toast('Add a client first');
-            return;
-          }
-          replaceSheet({ kind: 'entry', prefill: { date } });
-        }}
-      >
-        <PlusIcon className="size-3.5" />
-        Add entry for this day
-      </button>
     </Sheet>
   );
 }

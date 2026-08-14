@@ -1,228 +1,417 @@
 import { useState } from 'react';
+import { POSTAL_CODE_LENGTH, TAX_NUMBER_LENGTH, fieldErrors, profileSchema } from '@reckon/shared';
 import { useAuth } from '../auth/context';
+import { Select } from '../components/Select';
 import { Field, Sheet } from '../components/ui';
 import { DEFAULT_VAT_CLAUSE } from '../lib/storage';
 import type { Profile } from '../lib/types';
+import type { OpenSheet } from '../lib/sheets';
+import { activeBusiness } from '../lib/business';
+import { fmtDMY } from '../lib/format';
 import { useStore } from '../store/context';
-import { btn, btnBlock, hint, input, row2, btnSm } from '../styles/cx';
+import { btn, btnBlock, btnSm, cardLabel, hint, input } from '../styles/cx';
 
-export function ProfileSheet({ onClose }: { onClose: () => void }) {
+const digitsOnly = (value: string, max: number) => value.replace(/\D/g, '').slice(0, max);
+
+/** Numbers live in the form as strings so a half-typed value isn't destroyed. */
+type Draft = Omit<Profile, 'taxRate' | 'monthlyContribution'> & {
+  taxRate: string;
+  monthlyContribution: string;
+};
+
+export function ProfileSheet({
+  onClose,
+  openSheet,
+}: {
+  onClose: () => void;
+  openSheet?: OpenSheet;
+}) {
   const { data, update, toast } = useStore();
   const { user, signOut } = useAuth();
   const p = data.profile;
 
-  const [form, setForm] = useState<Profile>({
+  const [form, setForm] = useState<Draft>({
     ...p,
-    vatClause: p.vatClause ?? DEFAULT_VAT_CLAUSE,
+    vatClause: p.vatClause || DEFAULT_VAT_CLAUSE,
+    taxRate: String(p.taxRate ?? ''),
+    monthlyContribution: String(p.monthlyContribution ?? ''),
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const set = <K extends keyof Profile>(key: K, value: Profile[K]) =>
+  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
+    setErrors((e) =>
+      key in e ? Object.fromEntries(Object.entries(e).filter(([k]) => k !== key)) : e,
+    );
+  };
 
   const save = () => {
-    update((d) => {
-      d.profile = {
-        ...form,
-        name: form.name.trim(),
-        address: form.address.trim(),
-        taxNumber: form.taxNumber.trim(),
-        regNumber: form.regNumber.trim(),
-        iban: form.iban.trim(),
-        defaultDesc: form.defaultDesc.trim(),
-        lastInvoiceNumber: form.lastInvoiceNumber.trim(),
-        placeOfIssue: form.placeOfIssue.trim(),
-        vatClause: form.vatClause.trim(),
-      };
+    const parsed = profileSchema.safeParse({
+      ...form,
+      taxRate: parseFloat(form.taxRate),
+      monthlyContribution: parseFloat(form.monthlyContribution),
     });
-    toast('Profile saved');
+    if (!parsed.success) {
+      setErrors(fieldErrors(parsed.error));
+      toast('Preverite označena polja');
+      return;
+    }
+    update((d) => {
+      d.profile = parsed.data;
+    });
+    toast('Podatki shranjeni');
     onClose();
   };
 
+  const cls = (key: keyof Draft) => input + (errors[key] ? ' border-destructive' : '');
+  const invalid = (key: keyof Draft) => (errors[key] ? true : undefined);
+
   return (
-    <Sheet title="Your details" onClose={onClose}>
-      <Field label="Full name" htmlFor="pName">
+    <Sheet
+      title="Moji podatki"
+      onClose={onClose}
+      footer={
+        <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
+          Shrani
+        </button>
+      }
+    >
+      <div className={cardLabel}>Izdajatelj računa</div>
+
+      <Field
+        label="Ime in priimek / naziv"
+        htmlFor="pName"
+        error={errors.name}
+        hint="Točno kot je registrirano, vključno s pripisom s.p."
+      >
         <input
           id="pName"
-          className={input}
+          className={cls('name')}
           type="text"
-          placeholder="e.g. Ana Novak s.p."
+          placeholder="npr. Ana Novak s.p."
           value={form.name}
+          aria-invalid={invalid('name')}
           onChange={(e) => set('name', e.target.value)}
         />
       </Field>
 
-      <Field label="Registered address" htmlFor="pAddress">
+      <Field label="Ulica in hišna številka" htmlFor="pStreet" error={errors.street}>
         <input
-          id="pAddress"
-          className={input}
+          id="pStreet"
+          className={cls('street')}
           type="text"
-          placeholder="Street, postal code, city"
-          value={form.address}
-          onChange={(e) => set('address', e.target.value)}
+          placeholder="npr. Izletniška pot 52"
+          autoComplete="street-address"
+          value={form.street}
+          aria-invalid={invalid('street')}
+          onChange={(e) => set('street', e.target.value)}
         />
       </Field>
 
-      <div className={row2}>
-        <Field label="Tax number" htmlFor="pTax">
+      <div className="mb-4 grid grid-cols-[9rem_1fr] gap-3">
+        <Field label="Poštna številka" htmlFor="pPostal" error={errors.postalCode}>
           <input
-            id="pTax"
-            className={input}
+            id="pPostal"
+            className={cls('postalCode')}
             type="text"
-            placeholder="SI12345678"
-            value={form.taxNumber}
-            onChange={(e) => set('taxNumber', e.target.value)}
+            inputMode="numeric"
+            maxLength={POSTAL_CODE_LENGTH}
+            placeholder="6000"
+            autoComplete="postal-code"
+            value={form.postalCode}
+            aria-invalid={invalid('postalCode')}
+            onChange={(e) => set('postalCode', digitsOnly(e.target.value, POSTAL_CODE_LENGTH))}
           />
         </Field>
-        <Field label="Registration no." htmlFor="pReg">
+        <Field label="Kraj" htmlFor="pCity" error={errors.city}>
           <input
-            id="pReg"
-            className={input}
+            id="pCity"
+            className={cls('city')}
             type="text"
-            placeholder="matična številka"
-            value={form.regNumber}
-            onChange={(e) => set('regNumber', e.target.value)}
+            placeholder="Koper"
+            autoComplete="address-level2"
+            value={form.city}
+            aria-invalid={invalid('city')}
+            onChange={(e) => set('city', e.target.value)}
           />
         </Field>
       </div>
 
-      <Field label="IBAN / TRR" htmlFor="pIban">
+      <div className={cardLabel}>Registracija</div>
+
+      <div className="mb-4 grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
+        <Field
+          label="Davčna številka"
+          htmlFor="pTax"
+          error={errors.taxNumber}
+          hint={`${form.taxNumber.length}/${TAX_NUMBER_LENGTH} mest`}
+        >
+          <input
+            id="pTax"
+            className={cls('taxNumber')}
+            type="text"
+            inputMode="numeric"
+            maxLength={TAX_NUMBER_LENGTH}
+            placeholder="82426490"
+            value={form.taxNumber}
+            aria-invalid={invalid('taxNumber')}
+            onChange={(e) => set('taxNumber', digitsOnly(e.target.value, TAX_NUMBER_LENGTH))}
+          />
+        </Field>
+        <Field
+          label={
+            <>
+              Matična številka <span className="font-normal text-muted-fg">(neobvezno)</span>
+            </>
+          }
+          htmlFor="pReg"
+          error={errors.regNumber}
+        >
+          <input
+            id="pReg"
+            className={cls('regNumber')}
+            type="text"
+            inputMode="numeric"
+            maxLength={10}
+            placeholder="1234567000"
+            value={form.regNumber}
+            aria-invalid={invalid('regNumber')}
+            onChange={(e) => set('regNumber', digitsOnly(e.target.value, 10))}
+          />
+        </Field>
+      </div>
+
+      <div className="mb-4 grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
+        <Field label="Zavezanec za DDV" htmlFor="pVat">
+          <Select
+            id="pVat"
+            value={form.vatPayer}
+            onChange={(v) => set('vatPayer', v as Profile['vatPayer'])}
+            options={[
+              { value: 'NE', label: 'NE — nisem zavezanec' },
+              { value: 'DA', label: 'DA — sem zavezanec' },
+            ]}
+          />
+        </Field>
+        <Field label="Način obdavčitve" htmlFor="pTaxSystem">
+          <Select
+            id="pTaxSystem"
+            value={form.taxSystem}
+            onChange={(v) => set('taxSystem', v as Profile['taxSystem'])}
+            options={[
+              { value: 'normiranec', label: 'Normiranec' },
+              { value: 'dejanski', label: 'Dejanski stroški' },
+            ]}
+          />
+        </Field>
+      </div>
+
+      <div className={cardLabel}>Dejavnost</div>
+
+      {(() => {
+        const business = activeBusiness(data.businesses);
+        if (!business) {
+          return (
+            <div className="mb-4">
+              <div className={hint}>
+                Podatki o vpisu s.p. še niso vneseni. Z njimi se prispevki obračunajo od
+                dneva začetka, dohodnina pa po dejanski stopnji vaše sheme.
+              </div>
+              <button
+                className={`${btn.outline} ${btnSm} mt-2`}
+                onClick={() => openSheet?.({ kind: 'business' })}
+              >
+                Registriraj dejavnost
+              </button>
+            </div>
+          );
+        }
+        return (
+          <div className="mb-4">
+            <div className="text-sm font-semibold">{business.firma}</div>
+            <div className={`${hint} mt-1`}>
+              Vpis {fmtDMY(business.startedOn)}
+              {business.closedOn ? ` · izbris ${fmtDMY(business.closedOn)}` : ' · aktivna'}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                className={`${btn.outline} ${btnSm}`}
+                onClick={() => openSheet?.({ kind: 'business', editing: business })}
+              >
+                Uredi dejavnost
+              </button>
+              {business.closedOn && (
+                <button
+                  className={`${btn.outline} ${btnSm}`}
+                  onClick={() => openSheet?.({ kind: 'business' })}
+                >
+                  Registriraj novo
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      <div className={cardLabel}>Plačilo</div>
+
+      <Field
+        label="TRR (IBAN)"
+        htmlFor="pIban"
+        error={errors.iban}
+        hint="Natisnjen na vsakem računu in zapisan v UPN QR kodo."
+      >
         <input
           id="pIban"
-          className={input}
+          className={cls('iban')}
           type="text"
-          placeholder="SI56 1234 5678 9012 345"
+          placeholder="SI56 1010 0005 8079 036"
           value={form.iban}
+          aria-invalid={invalid('iban')}
           onChange={(e) => set('iban', e.target.value)}
         />
       </Field>
 
-      <div className={row2}>
+      <Field
+        label={
+          <>
+            Imetnik računa{' '}
+            <span className="font-normal text-muted-fg">(neobvezno)</span>
+          </>
+        }
+        htmlFor="pAccountHolder"
+        error={errors.accountHolder}
+        hint="Izpolnite, če TRR ni odprt na ime firme — npr. osebni račun. To ime gre v UPN QR kodo."
+      >
+        <input
+          id="pAccountHolder"
+          className={cls('accountHolder')}
+          type="text"
+          maxLength={33}
+          placeholder={form.name || 'Ime in priimek imetnika'}
+          value={form.accountHolder}
+          aria-invalid={invalid('accountHolder')}
+          onChange={(e) => set('accountHolder', e.target.value)}
+        />
+      </Field>
+
+      <div className={cardLabel}>Rezervacija za dajatve</div>
+
+      <div className="mb-4 grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
         <Field
-          label="Dohodnina rate to set aside (%)"
+          label="Stopnja dohodnine (%)"
           htmlFor="pTaxRate"
-          hint="4% is typical for normiranci (flat-rate) on invoiced income."
+          error={errors.taxRate}
+          hint="Za normirance je običajno 4 %."
         >
           <input
             id="pTaxRate"
-            className={input}
+            className={cls('taxRate')}
             type="number"
             min="0"
             max="100"
             step="0.5"
+            inputMode="decimal"
             placeholder="4"
             value={form.taxRate}
-            onChange={(e) => set('taxRate', parseFloat(e.target.value) || 0)}
+            aria-invalid={invalid('taxRate')}
+            onChange={(e) => set('taxRate', e.target.value)}
           />
         </Field>
-        <Field label="VAT payer (davčni zavezanec)" htmlFor="pVat">
-          <select
-            id="pVat"
-            className={input}
-            value={form.vatPayer}
-            onChange={(e) => set('vatPayer', e.target.value as Profile['vatPayer'])}
-          >
-            <option value="NE">NE</option>
-            <option value="DA">DA</option>
-          </select>
-        </Field>
-      </div>
-
-      <div className={row2}>
-        <Field label="Taxation system" htmlFor="pTaxSystem">
-          <select
-            id="pTaxSystem"
-            className={input}
-            value={form.taxSystem}
-            onChange={(e) => set('taxSystem', e.target.value as Profile['taxSystem'])}
-          >
-            <option value="normiranec">Normiranec (flat-rate)</option>
-            <option value="dejanski">Dejanski stroški (actual costs)</option>
-          </select>
-        </Field>
-        <Field label="Prispevki per month (€)" htmlFor="pMonthlyContribution">
+        <Field
+          label="Prispevki na mesec (€)"
+          htmlFor="pMonthlyContribution"
+          error={errors.monthlyContribution}
+          hint="Znesek najdete na e-kartici eDavki."
+        >
           <input
             id="pMonthlyContribution"
-            className={input}
+            className={cls('monthlyContribution')}
             type="number"
             min="0"
             step="0.01"
-            placeholder="e.g. 651"
+            inputMode="decimal"
+            placeholder="651"
             value={form.monthlyContribution}
-            onChange={(e) => set('monthlyContribution', parseFloat(e.target.value) || 0)}
+            aria-invalid={invalid('monthlyContribution')}
+            onChange={(e) => set('monthlyContribution', e.target.value)}
           />
         </Field>
       </div>
 
-      <div className={`${hint} mb-4`}>
-        Prispevki (PIZ, health, parental, employment) are paid monthly regardless of profit
-        — check your eDavki e-kartica for your exact amount, it&apos;s lower in your first
-        two years if you&apos;re newly registered.
-      </div>
+      <div className={cardLabel}>Privzete vrednosti računa</div>
 
       <Field
-        label="Default service description"
+        label="Privzeti opis storitve"
         htmlFor="pDefaultDesc"
-        hint="Used to estimate what you owe FURS on paid invoices, and pre-fills each invoice's service line."
+        error={errors.defaultDesc}
+        hint="Predizpolni opis na vsakem novem računu."
       >
         <input
           id="pDefaultDesc"
-          className={input}
+          className={cls('defaultDesc')}
           type="text"
-          placeholder="e.g. Reševanje iz vode"
+          placeholder="npr. Reševanje iz vode"
           value={form.defaultDesc}
+          aria-invalid={invalid('defaultDesc')}
           onChange={(e) => set('defaultDesc', e.target.value)}
         />
       </Field>
 
-      <Field
-        label="Last invoice number already issued"
-        htmlFor="pLastInvoiceNumber"
-        hint="Set this if you've already issued invoices manually — new ones in the app will continue counting after it."
-      >
-        <input
-          id="pLastInvoiceNumber"
-          className={input}
-          type="text"
-          placeholder="e.g. 003/2026"
-          value={form.lastInvoiceNumber}
-          onChange={(e) => set('lastInvoiceNumber', e.target.value)}
-        />
-      </Field>
+      <div className="mb-4 grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
+        <Field label="Kraj izdaje" htmlFor="pPlaceOfIssue" error={errors.placeOfIssue}>
+          <input
+            id="pPlaceOfIssue"
+            className={cls('placeOfIssue')}
+            type="text"
+            placeholder="Koper"
+            value={form.placeOfIssue}
+            aria-invalid={invalid('placeOfIssue')}
+            onChange={(e) => set('placeOfIssue', e.target.value)}
+          />
+        </Field>
+        <Field
+          label="Naslednja številka računa"
+          htmlFor="pNextInvoiceNumber"
+          error={errors.nextInvoiceNumber}
+          hint="Številka, ki jo bo dobil naslednji račun. Predhodne morajo biti zabeležene."
+        >
+          <input
+            id="pNextInvoiceNumber"
+            className={cls('nextInvoiceNumber')}
+            type="text"
+            placeholder="003/2026"
+            value={form.nextInvoiceNumber}
+            aria-invalid={invalid('nextInvoiceNumber')}
+            onChange={(e) => set('nextInvoiceNumber', e.target.value)}
+          />
+        </Field>
+      </div>
 
-      <Field label="Place of issue (kraj izdaje)" htmlFor="pPlaceOfIssue">
-        <input
-          id="pPlaceOfIssue"
-          className={input}
-          type="text"
-          placeholder="e.g. Koper"
-          value={form.placeOfIssue}
-          onChange={(e) => set('placeOfIssue', e.target.value)}
-        />
-      </Field>
-
-      <Field
-        label="VAT clause (DDV klavzula)"
-        htmlFor="pVatClause"
-        hint="Printed on every invoice when you're not a VAT payer. Not strictly required by law, but standard practice and expected by accountants."
-      >
-        <input
-          id="pVatClause"
-          className={input}
-          type="text"
-          placeholder={DEFAULT_VAT_CLAUSE}
-          value={form.vatClause}
-          onChange={(e) => set('vatClause', e.target.value)}
-        />
-      </Field>
-
-      <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
-        Save
-      </button>
+      {/* Only meaningful while you aren't charging VAT. */}
+      {form.vatPayer === 'NE' && (
+        <Field
+          label="Klavzula DDV"
+          htmlFor="pVatClause"
+          error={errors.vatClause}
+          hint="Natisnjena na vsakem računu kot razlog, da DDV ni obračunan."
+        >
+          <input
+            id="pVatClause"
+            className={cls('vatClause')}
+            type="text"
+            placeholder={DEFAULT_VAT_CLAUSE}
+            value={form.vatClause}
+            aria-invalid={invalid('vatClause')}
+            onChange={(e) => set('vatClause', e.target.value)}
+          />
+        </Field>
+      )}
 
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4 text-xs text-muted-fg">
-        <span className="font-mono">{user?.email}</span>
+        <span className="truncate font-mono">{user?.email}</span>
         <button className={`${btn.outline} ${btnSm}`} onClick={() => void signOut()}>
-          Sign out
+          Odjava
         </button>
       </div>
     </Sheet>

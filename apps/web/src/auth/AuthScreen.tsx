@@ -33,7 +33,7 @@ export function AuthScreen() {
         setError(err.fields ? '' : err.message);
         setFields(err.fields ?? {});
       } else {
-        setError('Something went wrong. Try again.');
+        setError('Prišlo je do napake. Poskusite znova.');
       }
       setBusy(false);
     }
@@ -45,7 +45,7 @@ export function AuthScreen() {
         <div className="mb-6">
           <span className="block text-2xl font-bold tracking-tight">Reckon</span>
           <span className="mt-1 block font-mono text-2xs uppercase tracking-wider text-muted-fg">
-            freelance ledger
+            evidenca dela
           </span>
         </div>
 
@@ -55,14 +55,14 @@ export function AuthScreen() {
             className={tabSeg(mode === 'signin')}
             onClick={() => switchMode('signin')}
           >
-            Sign in
+            Prijava
           </button>
           <button
             type="button"
             className={tabSeg(mode === 'register')}
             onClick={() => switchMode('register')}
           >
-            Create account
+            Registracija
           </button>
         </div>
 
@@ -78,7 +78,7 @@ export function AuthScreen() {
         <form onSubmit={onSubmit} noValidate>
           <div className={field}>
             <label className={label} htmlFor="authEmail">
-              Email
+              E-pošta
             </label>
             <input
               id="authEmail"
@@ -96,7 +96,7 @@ export function AuthScreen() {
 
           <div className={field}>
             <label className={label} htmlFor="authPassword">
-              Password
+              Geslo
             </label>
             <input
               id="authPassword"
@@ -111,34 +111,34 @@ export function AuthScreen() {
             {fields.password ? (
               <div className="mt-1.5 text-xs text-error-fg">{fields.password}</div>
             ) : mode === 'register' ? (
-              <div className={hint}>At least 8 characters.</div>
+              <div className={hint}>Najmanj 8 znakov.</div>
             ) : null}
           </div>
 
           <button className={`${btn.primary} ${btnBlock}`} type="submit" disabled={busy}>
             {busy
               ? mode === 'signin'
-                ? 'Signing in…'
-                : 'Creating account…'
+                ? 'Prijavljam …'
+                : 'Ustvarjam račun …'
               : mode === 'signin'
-                ? 'Sign in'
-                : 'Create account'}
+                ? 'Prijava'
+                : 'Ustvari račun'}
           </button>
         </form>
 
         <p className="mt-4 mb-0 text-center text-xs text-muted-fg">
           {mode === 'signin' ? (
             <>
-              No account yet?{' '}
+              Še nimate računa?{' '}
               <button className="cursor-pointer border-none bg-none p-0 font-semibold text-primary underline underline-offset-2" onClick={() => switchMode('register')}>
-                Create one
+                Ustvarite ga
               </button>
             </>
           ) : (
             <>
-              Already registered?{' '}
+              Že registrirani?{' '}
               <button className="cursor-pointer border-none bg-none p-0 font-semibold text-primary underline underline-offset-2" onClick={() => switchMode('signin')}>
-                Sign in
+                Prijavite se
               </button>
             </>
           )}

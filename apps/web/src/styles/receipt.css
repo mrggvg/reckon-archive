@@ -44,6 +44,15 @@
   text-align: right;
   flex-shrink: 0;
 }
+.receipt-band .num-block .issuer-mark {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #999;
+  margin-bottom: 8px;
+}
 .receipt-band .num-block .num-label {
   font-family: 'Inter', sans-serif;
   font-size: 9.5px;
@@ -395,7 +404,21 @@
 }
 
 /* ---------- Print (invoice / timesheet) ---------- */
+@page {
+  size: A4;
+  /* Zero margins leave the browser nowhere to print its own header and footer —
+     the date, page title, URL and page number it otherwise injects. The
+     document supplies its own margin below. */
+  margin: 0;
+}
+
 @media print {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
   body * {
     visibility: hidden;
   }
@@ -415,7 +438,11 @@
     box-shadow: none;
     border: none;
     border-radius: 0;
+    /* On screen the panel is a viewport-tall drawer; on paper it's as tall as
+       the document inside it. */
+    height: auto !important;
     max-height: none;
+    min-width: 0;
     max-width: none;
     width: 100%;
     padding: 0;
@@ -436,10 +463,12 @@
   .receipt {
     box-shadow: none;
     border: none;
+    /* Our own page margin, now that @page has none. */
+    padding: 14mm 14mm 12mm;
   }
   .ts-doc {
     box-shadow: none;
     border: none;
-    padding: 0;
+    padding: 14mm 14mm 12mm;
   }
 }

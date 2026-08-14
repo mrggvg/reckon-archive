@@ -8,16 +8,20 @@ import {
   EditIcon,
   UploadIcon,
 } from '../components/icons';
+import { formatAddress } from '@reckon/shared';
 import { Field, SectionHead, StatCard } from '../components/ui';
-import { input, row2 } from '../styles/cx';
+import { row2 } from '../styles/cx';
 import { downloadBlob } from '../lib/download';
 import { fmtHours, fmtMoney, hoursBetween, todayIso } from '../lib/format';
-import { invoiceStatusComputed } from '../lib/invoice';
+import { invoiceStatusComputed, missingInvoiceNumbers } from '../lib/invoice';
+import { InvoiceHistoryRequired } from '../components/InvoiceHistoryRequired';
 import type { OpenSheet } from '../lib/sheets';
 import { normalize } from '../lib/storage';
 import type { TabName } from '../lib/types';
 import { useStore } from '../store/context';
 import { btn, btnBlock, btnSm, card, cardLabel, hint } from '../styles/cx';
+import { Select } from '../components/Select';
+import { DateField } from '../components/DateField';
 
 export function OverviewView({
   openSheet,
@@ -66,7 +70,7 @@ export function OverviewView({
       `reckon-backup-${todayIso()}.json`,
       'application/json',
     );
-    toast('Backup downloaded');
+    toast('Varnostna kopija prenesena');
   };
 
   const restoreBackup = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -78,65 +82,80 @@ export function OverviewView({
         const parsed: unknown = JSON.parse(String(reader.result));
         if (!parsed || typeof parsed !== 'object') throw new Error('bad format');
         if (
-          !confirm('This will replace all current data in the app with the backup file. Continue?')
+          !confirm('To bo zamenjalo vse trenutne podatke z vsebino varnostne kopije. Nadaljujem?')
         ) {
           return;
         }
         replace(normalize(parsed));
-        toast('Backup restored');
+        toast('Podatki obnovljeni');
       } catch {
-        toast('Could not read that file — is it a Reckon backup?');
+        toast('Datoteke ni bilo mogoče prebrati — je to varnostna kopija Reckon?');
       }
       event.target.value = '';
     };
     reader.readAsText(file);
   };
 
+  const missing = missingInvoiceNumbers(data.profile.nextInvoiceNumber, data.invoices);
+
   return (
     <>
       <SectionHead
-        title="Overview"
-        count={now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+        title="Pregled"
+        count={now.toLocaleDateString('sl-SI', { month: 'long', year: 'numeric' })}
       />
 
-      {overdue.length > 0 && (
+      {missing.length > 0 && (
+        <InvoiceHistoryRequired
+          missing={missing}
+          onRecord={(number) => openSheet({ kind: 'importInvoice', prefillNumber: number })}
+        />
+      )}
+
+      {missing.length === 0 && overdue.length > 0 && (
         <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-border bg-error-bg p-4 text-sm leading-normal text-error-fg">
           <AlertIcon className="mt-0.5 size-4 shrink-0" />
           <div className="flex-1">
             <strong className="mb-0.5 block">
-              {overdue.length} invoice{overdue.length === 1 ? '' : 's'} overdue
+              {overdue.length === 1 ? '1 zapadel račun' : `${overdue.length} zapadlih računov`}
             </strong>
-            {fmtMoney(overdueTotal)} total, past due date and still unpaid.
+            Skupaj {fmtMoney(overdueTotal)} po roku plačila in še neplačano.
           </div>
           <button
             className={`${btn.outline} ${btnSm} shrink-0 bg-card`}
             onClick={() => goTab('invoices')}
           >
-            View
+            Poglej
           </button>
         </div>
       )}
 
+      {missing.length === 0 && (
+        <>
       <div className="mb-4 rounded-2xl border border-border bg-fg p-5 text-card">
-        <div className="text-xs font-medium text-white/65">Est. tax due this month (FURS)</div>
+        <div className="text-xs font-medium text-white/65">Ocenjena dajatev za ta mesec (FURS)</div>
         <div className="my-1 text-3xl font-bold leading-tight tracking-tight">
           {fmtMoney(taxDue)}
         </div>
         <div className="text-xs text-white/65">
-          based on {fmtMoney(paidThisMonth)} received this month · rate {rate}%
+          od {fmtMoney(paidThisMonth)} prejetih ta mesec · stopnja {rate} %
         </div>
       </div>
 
       <div className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-4">
-        <StatCard label="Paid this month" value={fmtMoney(paidThisMonth)} tone="primary" />
-        <StatCard label="Outstanding" value={fmtMoney(outstanding)} />
-        <StatCard label="Unbilled hours" value={fmtHours(unbilledHours)} />
-        <StatCard label="Active clients" value={data.clients.length} />
+        <StatCard label="Prejeto ta mesec" value={fmtMoney(paidThisMonth)} tone="primary" />
+        <StatCard label="Odprte terjatve" value={fmtMoney(outstanding)} />
+        <StatCard label="Neobračunane ure" value={fmtHours(unbilledHours)} />
+        <StatCard label="Število strank" value={data.clients.length} />
       </div>
 
+        </>
+      )}
+
+      {missing.length === 0 && (
       <button className={`${card} block w-full cursor-pointer text-left`} onClick={() => goTab('tax')}>
         <div className="flex items-center justify-between">
-          <span className={`${cardLabel} mb-0`}>Tax — {year}</span>
+          <span className={`${cardLabel} mb-0`}>Davki — {year}</span>
           <ChevronRightIcon className="size-4 text-muted-fg" />
         </div>
         <div
@@ -150,25 +169,27 @@ export function OverviewView({
           }
         >
           {balance > 0.005
-            ? `${fmtMoney(balance)} behind`
+            ? `${fmtMoney(balance)} zaostanka`
             : balance < -0.005
-              ? `${fmtMoney(Math.abs(balance))} ahead`
+              ? `${fmtMoney(Math.abs(balance))} vnaprej`
               : '€0.00'}
         </div>
         <div className={hint}>
           {balance > 0.005
-            ? "Estimated obligation is ahead of what you've logged as paid"
+            ? 'Ocenjena obveznost presega zabeležena plačila'
             : balance < -0.005
-              ? "You've paid more than the running estimate — nice"
-              : 'Tap to view dohodnina, prispevki, and payments'}
+              ? 'Plačali ste več, kot znaša tekoča ocena'
+              : 'Odprite za dohodnino, prispevke in plačila'}
         </div>
       </button>
+
+      )}
 
       <button
         className="my-4 flex w-full cursor-pointer items-center justify-between border-y border-border bg-none px-1 py-3 text-sm font-semibold text-muted-fg"
         onClick={() => setShowMore((v) => !v)}
       >
-        <span>{showMore ? 'Hide tools & settings' : 'More tools & settings'}</span>
+        <span>{showMore ? 'Skrij orodja in nastavitve' : 'Več orodij in nastavitev'}</span>
         {showMore ? (
           <ChevronUpIcon className="size-4" />
         ) : (
@@ -181,33 +202,33 @@ export function OverviewView({
           <QueryCard />
 
           <div className={card}>
-            <div className={cardLabel}>Your details</div>
+            <div className={cardLabel}>Moji podatki</div>
             <ProfileSummary />
             <button
               className={`${btn.outline} ${btnSm} mt-3`}
               onClick={() => openSheet({ kind: 'profile' })}
             >
               <EditIcon className="size-3.5" />
-              Edit details
+              Uredi podatke
             </button>
           </div>
 
           <div className={card}>
-            <div className={cardLabel}>Backup &amp; restore</div>
+            <div className={cardLabel}>Varnostna kopija</div>
             <div className={`${hint} mb-3`}>
-              Your data lives only in this browser. Download a backup now and then, so a
-              cleared browser or new phone doesn&apos;t lose everything.
+              Podatki so shranjeni samo v tem brskalniku. Občasno prenesite varnostno
+              kopijo, da jih ob zamenjavi naprave ali brisanju podatkov ne izgubite.
             </div>
             <button className={`${btn.outline} ${btnBlock}`} onClick={downloadBackup}>
               <DownloadIcon className="size-3.5" />
-              Download backup (JSON)
+              Prenesi varnostno kopijo (JSON)
             </button>
             <button
               className={`${btn.outline} ${btnBlock} mt-2`}
               onClick={() => fileInput.current?.click()}
             >
               <UploadIcon className="size-3.5" />
-              Restore from backup
+              Obnovi iz varnostne kopije
             </button>
             <input
               ref={fileInput}
@@ -229,7 +250,8 @@ function ProfileSummary() {
   if (!p.name) {
     return (
       <div className={hint}>
-        No details yet — add your name, IBAN and tax number so invoices generate correctly.
+        Podatki še niso vneseni — dodajte ime, IBAN in davčno številko, da bodo računi
+        pravilni.
       </div>
     );
   }
@@ -237,14 +259,14 @@ function ProfileSummary() {
     <div className="text-sm leading-loose text-muted-fg">
       <strong className="text-fg">{p.name}</strong>
       <br />
-      {p.address || '—'}
+      {formatAddress(p) || '—'}
       <br />
-      Tax no. <span className="font-mono">{p.taxNumber || '—'}</span> · VAT payer:{' '}
+      Davčna št. <span className="font-mono">{p.taxNumber || '—'}</span> · Zavezanec za DDV:{' '}
       <span className="font-mono">{p.vatPayer}</span>
       <br />
-      TRR (IBAN) <span className="font-mono">{p.iban || '—'}</span>
+      TRR <span className="font-mono">{p.iban || '—'}</span>
       <br />
-      Set-aside rate: <span className="font-mono">{p.taxRate || 0}%</span>
+      Stopnja odvajanja: <span className="font-mono">{p.taxRate || 0} %</span>
     </div>
   );
 }
@@ -300,74 +322,66 @@ function QueryCard() {
 
   return (
     <div className={card}>
-      <div className={cardLabel}>Query hours &amp; earnings</div>
-      <Field label="Client" htmlFor="qClient">
-        <select
+      <div className={cardLabel}>Poizvedba po urah in zaslužku</div>
+      <Field label="Stranka" htmlFor="qClient">
+        <Select
           id="qClient"
-          className={input}
           value={clientId}
-          onChange={(e) => setClientId(e.target.value)}
-        >
-          <option value="all">All clients</option>
-          {data.clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onChange={setClientId}
+          options={[
+            { value: 'all', label: 'Vse stranke' },
+            ...data.clients.map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
       </Field>
       <div className={row2}>
-        <Field label="From" htmlFor="qFrom">
-          <input
-            id="qFrom"
-            className={input}
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-          />
+        <Field label="Od" htmlFor="qFrom">
+          <DateField
+          id="qFrom"
+          value={from}
+          onChange={setFrom}
+        />
         </Field>
-        <Field label="To" htmlFor="qTo">
-          <input
-            id="qTo"
-            className={input}
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-          />
+        <Field label="Do" htmlFor="qTo">
+          <DateField
+          id="qTo"
+          value={to}
+          onChange={setTo}
+        />
         </Field>
       </div>
       <button className={`${btn.outline} ${btnBlock}`} onClick={run}>
-        Run query
+        Poišči
       </button>
 
       {result && (
         <div className="mt-4 border-t border-dashed border-input-border pt-4">
           <div className="flex justify-between py-1.5 text-sm">
-            <span className="text-muted-fg">Hours logged</span>
+            <span className="text-muted-fg">Zabeležene ure</span>
             <span className="font-mono font-semibold">{fmtHours(result.totalHours)}</span>
           </div>
           <div className="flex justify-between py-1.5 text-sm">
-            <span className="text-muted-fg">— already invoiced</span>
+            <span className="text-muted-fg">— že zaračunano</span>
             <span className="font-mono font-semibold">{fmtHours(result.billedHours)}</span>
           </div>
           <div className="flex justify-between py-1.5 text-sm">
-            <span className="text-muted-fg">— unbilled</span>
+            <span className="text-muted-fg">— neobračunano</span>
             <span className="font-mono font-semibold">{fmtHours(result.unbilledHours)}</span>
           </div>
           <div className="flex justify-between py-1.5 text-sm">
-            <span className="text-muted-fg">Invoices in range</span>
+            <span className="text-muted-fg">Računi v obdobju</span>
             <span className="font-mono font-semibold">{result.count}</span>
           </div>
           <div className="flex justify-between py-1.5 text-sm">
-            <span className="text-muted-fg">— paid</span>
+            <span className="text-muted-fg">— plačano</span>
             <span className="font-mono font-semibold">{fmtMoney(result.paidTotal)}</span>
           </div>
           <div className="flex justify-between py-1.5 text-sm">
-            <span className="text-muted-fg">— unpaid</span>
+            <span className="text-muted-fg">— neplačano</span>
             <span className="font-mono font-semibold">{fmtMoney(result.unpaidTotal)}</span>
           </div>
           <div className="mt-1 flex justify-between border-t border-border pt-2.5 py-1.5 text-sm font-bold">
-            <span className="text-muted-fg">Total invoiced</span>
+            <span className="text-muted-fg">Skupaj zaračunano</span>
             <span className="font-mono font-semibold">{fmtMoney(result.invoicedTotal)}</span>
           </div>
         </div>

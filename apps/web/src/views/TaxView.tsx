@@ -6,18 +6,27 @@ import {
   PlusIcon,
   TrashIcon,
 } from '../components/icons';
+import {
+  advanceCadence,
+  advanceInstalment,
+  contributionReliefEndsOn,
+  normiranecCapUsage,
+} from '@reckon/shared';
 import { Field, StatCard } from '../components/ui';
-import { fmtDMY, fmtMoney } from '../lib/format';
+import { activeBusiness, contributionsForYear, incomeTaxForYear } from '../lib/business';
+import { missingInvoiceNumbers } from '../lib/invoice';
+import { InvoiceHistoryRequired } from '../components/InvoiceHistoryRequired';
+import { fmtDMY, fmtMoney, todayIso } from '../lib/format';
 import type { OpenSheet } from '../lib/sheets';
 import { uid } from '../lib/storage';
 import type { TabName, TaxPaymentType } from '../lib/types';
 import { useStore } from '../store/context';
-import { btn, btnBlock, card, cardLabel, emptyInline, hint, iconBtn, input } from '../styles/cx';
+import { btn, btnBlock, btnSm, card, cardLabel, emptyInline, hint, iconBtn, input } from '../styles/cx';
 
 const TYPE_LABELS: Record<TaxPaymentType, string> = {
   dohodnina: 'Akontacija dohodnine',
   prispevki: 'Prispevki',
-  drugo: 'Other',
+  drugo: 'Drugo',
 };
 
 export function TaxView({
@@ -38,18 +47,28 @@ export function TaxView({
   const setAssessed = (value: string) =>
     setDrafts((d) => ({ ...d, [year]: value }));
 
-  const rate = data.profile.taxRate || 0;
-  const monthlyContribution = data.profile.monthlyContribution || 0;
+  const business = activeBusiness(data.businesses);
 
-  const paidInYear = data.invoices
-    .filter((i) => i.status === 'paid' && i.paidDate?.startsWith(String(year)))
-    .reduce((sum, i) => sum + i.total, 0);
-  const dohodninaEst = paidInYear * (rate / 100);
+  const paidThisYear = data.invoices.filter(
+    (i) => i.status === 'paid' && i.paidDate?.startsWith(String(year)),
+  );
+  const paidInYear = paidThisYear.reduce((sum, i) => sum + i.total, 0);
 
-  const monthsCount =
-    year < now.getFullYear() ? 12 : year === now.getFullYear() ? now.getMonth() + 1 : 0;
-  const prispevkiDue = monthlyContribution * monthsCount;
+  // Taxed at the rate of whichever registration was in force when it was paid;
+  // the profile's own rate is only a fallback for pre-registration data.
+  const dohodninaEst = incomeTaxForYear(data.businesses, paidThisYear, data.profile.taxRate || 0);
+
+  // Prispevki run from the day of vpis, not from January — and stop at izbris.
+  const prispevkiDue = data.businesses.length
+    ? contributionsForYear(data.businesses, year, todayIso())
+    : (data.profile.monthlyContribution || 0) *
+      (year < now.getFullYear() ? 12 : year === now.getFullYear() ? now.getMonth() + 1 : 0);
+
   const totalEstimate = dohodninaEst + prispevkiDue;
+
+  const cap = normiranecCapUsage(paidInYear, business?.revenueCap);
+  const missing = missingInvoiceNumbers(data.profile.nextInvoiceNumber, data.invoices);
+  const relief = business ? contributionReliefEndsOn(business) : null;
 
   const paymentsThisYear = data.taxPayments.filter((p) => p.date?.startsWith(String(year)));
   const actuallyPaid = paymentsThisYear.reduce((sum, p) => sum + p.amount, 0);
@@ -60,7 +79,7 @@ export function TaxView({
   const saveAssessment = () => {
     const amount = parseFloat(assessed);
     if (isNaN(amount)) {
-      toast('Enter the assessed amount');
+      toast('Vnesite odmerjeni znesek');
       return;
     }
     update((d) => {
@@ -68,7 +87,7 @@ export function TaxView({
       if (existing) existing.amount = amount;
       else d.taxAssessments.push({ id: uid('ta'), year, amount });
     });
-    toast('Assessment saved');
+    toast('Odločba shranjena');
   };
 
   const dohodninaPaid = paymentsThisYear
@@ -82,16 +101,16 @@ export function TaxView({
         <button
           className={iconBtn}
           onClick={() => goTab('overview')}
-          aria-label="Back to Overview"
+          aria-label="Nazaj na pregled"
         >
           <BackIcon />
         </button>
-        <h1 className="flex-1 text-2xl font-bold tracking-tight">Tax</h1>
+        <h1 className="flex-1 text-2xl font-bold tracking-tight">Davki</h1>
         <div className="flex items-center gap-2">
           <button
             className={iconBtn}
             onClick={() => setYear((y) => y - 1)}
-            aria-label="Previous year"
+            aria-label="Prejšnje leto"
           >
             <ChevronLeftIcon />
           </button>
@@ -99,7 +118,7 @@ export function TaxView({
           <button
             className={iconBtn}
             onClick={() => setYear((y) => y + 1)}
-            aria-label="Next year"
+            aria-label="Naslednje leto"
           >
             <ChevronRightIcon />
           </button>
@@ -107,33 +126,100 @@ export function TaxView({
       </div>
 
       <div className={`${hint} mb-4`}>
-        Slovenia splits this in two: <strong>akontacija dohodnine</strong> (income tax
-        advance, paid on what you actually earn) and <strong>prispevki</strong> (social
-        security — pension, health, parental, employment — a roughly fixed monthly amount
-        regardless of income). Both go to FURS but they&apos;re separate obligations.
+Dajatve sta dve: <strong>akontacija dohodnine</strong> (odvisna od dejanskega
+        zaslužka) in <strong>prispevki</strong> (PIZ, zdravstvo, starševsko varstvo in
+        zaposlovanje — približno stalen mesečni znesek ne glede na prihodek). Oboje gre
+        FURS-u, a sta ločeni obveznosti.
       </div>
 
+      {business && (
+        <div className="mb-4 rounded-2xl border border-border bg-card p-4 shadow-xs">
+          <div className={cardLabel}>Dejavnost</div>
+          <div className="text-sm font-semibold">{business.firma || '—'}</div>
+          <div className={`${hint} mt-1`}>
+            Vpis {fmtDMY(business.startedOn)}
+            {business.closedOn ? ` · izbris ${fmtDMY(business.closedOn)}` : ''}
+            {business.skdCode ? ` · SKD ${business.skdCode}` : ''}
+          </div>
+          {business.advanceAnnual > 0 && (
+            <div className={`${hint} mt-1`}>
+              Akontacija {fmtMoney(business.advanceAnnual)} letno ·{' '}
+              {advanceCadence(business.advanceAnnual) === 'monthly' ? 'mesečni' : 'trimesečni'} obrok{' '}
+              {fmtMoney(advanceInstalment(business.advanceAnnual))}
+            </div>
+          )}
+          {relief && !business.closedOn && (
+            <div className={`${hint} mt-1`}>
+              Znižani prispevki: 50 % do {fmtDMY(relief.firstTierEndsOn)}, nato 30 % do{' '}
+              {fmtDMY(relief.secondTierEndsOn)}.
+            </div>
+          )}
+          <button
+            className={`${btn.outline} ${btnSm} mt-3`}
+            onClick={() => openSheet({ kind: 'business', editing: business })}
+          >
+            Uredi dejavnost
+          </button>
+        </div>
+      )}
+
+      {!business && (
+        <div className="mb-4 rounded-2xl border border-border bg-card p-4 shadow-xs">
+          <div className={cardLabel}>Dejavnost ni vnesena</div>
+          <div className={hint}>
+            Vnesite podatke o vpisu s.p., da bodo prispevki obračunani od dneva začetka in
+            ne od januarja.
+          </div>
+          <button
+            className={`${btn.primary} ${btnSm} mt-3`}
+            onClick={() => openSheet({ kind: 'business' })}
+          >
+            Registriraj dejavnost
+          </button>
+        </div>
+      )}
+
+      {missing.length > 0 && (
+        <InvoiceHistoryRequired
+          missing={missing}
+          onRecord={(number) => openSheet({ kind: 'importInvoice', prefillNumber: number })}
+        />
+      )}
+
+      {missing.length === 0 && (cap.nearing || cap.exceeded) && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-border bg-warning-bg p-4 text-sm leading-normal text-warning-fg">
+          <div>
+            <strong className="mb-0.5 block">
+              {cap.exceeded ? 'Meja za normiranca presežena' : 'Približujete se meji za normiranca'}
+            </strong>
+            {fmtMoney(paidInYear)} od {fmtMoney(cap.cap)} letnega prihodka.
+          </div>
+        </div>
+      )}
+
+      {missing.length === 0 && (
+        <>
       <div className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-4">
-        <StatCard label="Est. dohodnina (year)" value={fmtMoney(dohodninaEst)} tone="primary" />
-        <StatCard label="Prispevki due (year)" value={fmtMoney(prispevkiDue)} />
-        <StatCard label="Actually paid (year)" value={fmtMoney(actuallyPaid)} />
+        <StatCard label="Ocenjena dohodnina (leto)" value={fmtMoney(dohodninaEst)} tone="primary" />
+        <StatCard label="Prispevki (leto)" value={fmtMoney(prispevkiDue)} />
+        <StatCard label="Dejansko plačano (leto)" value={fmtMoney(actuallyPaid)} />
         <StatCard
-          label="Balance"
+          label="Razlika"
           tone={balance > 0.005 ? 'behind' : balance < -0.005 ? 'ahead' : undefined}
           value={
             balance > 0.005
-              ? `${fmtMoney(balance)} behind`
+              ? `${fmtMoney(balance)} zaostanka`
               : balance < -0.005
-                ? `${fmtMoney(Math.abs(balance))} ahead`
+                ? `${fmtMoney(Math.abs(balance))} vnaprej`
                 : '€0.00'
           }
         />
       </div>
 
       <div className={card}>
-        <div className={cardLabel}>Payments to FURS</div>
+        <div className={cardLabel}>Plačila FURS</div>
         {sortedPayments.length === 0 ? (
-          <div className={emptyInline}>No payments logged for {year} yet.</div>
+          <div className={emptyInline}>Za leto {year} ni zabeleženih plačil.</div>
         ) : (
           sortedPayments.map((p) => (
             <div
@@ -155,7 +241,7 @@ export function TaxView({
                     d.taxPayments = d.taxPayments.filter((x) => x.id !== p.id);
                   })
                 }
-                aria-label="Delete payment"
+                aria-label="Izbriši plačilo"
               >
                 <TrashIcon className="size-4" />
               </button>
@@ -167,36 +253,38 @@ export function TaxView({
           onClick={() => openSheet({ kind: 'taxPayment' })}
         >
           <PlusIcon className="size-3.5" />
-          Log a payment
+          Dodaj plačilo
         </button>
       </div>
+        </>
+      )}
 
       <div className={card}>
-        <div className={cardLabel}>Year-end assessment (odločba)</div>
+        <div className={cardLabel}>Letna odločba</div>
         <div className={`${hint} mb-3`}>
-          Once FURS sends your dohodninska odločba for this year, enter the assessed amount
-          here to see how it compares to what you paid in akontacije.
+          Ko prejmete dohodninsko odločbo za to leto, vnesite odmerjeni znesek in
+          primerjajte ga s plačanimi akontacijami.
         </div>
-        <Field label={`Assessed dohodnina for ${year} (EUR)`} htmlFor="taxAssessed">
+        <Field label={`Odmerjena dohodnina za ${year} (EUR)`} htmlFor="taxAssessed">
           <input
             id="taxAssessed"
             className={input}
             type="number"
             min="0"
             step="0.01"
-            placeholder="not entered yet"
+            placeholder="še ni vneseno"
             value={assessed}
             onChange={(e) => setAssessed(e.target.value)}
           />
         </Field>
         <button className={`${btn.outline} ${btnBlock}`} onClick={saveAssessment}>
-          Save assessment
+          Shrani odločbo
         </button>
 
         {assessment && (
           <>
             <div className="mt-4 flex items-center justify-between border-t border-dashed border-input-border pt-4">
-              <span>{diff >= 0 ? 'Additional to pay' : 'Refund due to you'}</span>
+              <span>{diff >= 0 ? 'Za doplačilo' : 'Za vračilo'}</span>
               <span
                 className={
                   'text-lg font-bold ' + (diff >= 0 ? 'text-destructive' : 'text-secondary')
@@ -206,8 +294,8 @@ export function TaxView({
               </span>
             </div>
             <div className={`${hint} mt-1.5`}>
-              Assessed {fmtMoney(assessment.amount)} vs {fmtMoney(dohodninaPaid)} paid in
-              akontacije dohodnine logged for {year}.
+              Odmerjeno {fmtMoney(assessment.amount)} proti {fmtMoney(dohodninaPaid)}{' '}
+              plačanih akontacij za {year}.
             </div>
           </>
         )}

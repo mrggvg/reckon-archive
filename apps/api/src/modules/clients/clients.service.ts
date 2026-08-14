@@ -6,7 +6,7 @@ export const clientsService = {
 
   async get(userId: string, id: string) {
     const client = await clientsRepo.findById(userId, id);
-    if (!client) throw new NotFoundError('Client not found');
+    if (!client) throw new NotFoundError('Stranka ni najdena');
     return client;
   },
 };

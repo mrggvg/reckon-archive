@@ -8,6 +8,9 @@ export interface StoreValue {
   /** Replace the whole dataset (restore from backup). */
   replace: (next: AppData) => void;
   toast: (message: string) => void;
+  /** Rendered by App, which knows whether a panel is covering the right edge. */
+  toastMessage: string;
+  toastVisible: boolean;
 }
 
 export const StoreContext = createContext<StoreValue | null>(null);
