@@ -42,6 +42,13 @@ import { InvoicesView } from './views/InvoicesView';
 import { ProfileView } from './views/ProfileView';
 import { TrackView } from './views/TrackView';
 
+/** What the phone's add button does on each tab. */
+const FAB_LABEL: Record<TabName, string> = {
+  track: 'Vnesi ure',
+  clients: 'Nova stranka',
+  invoices: 'Nov račun',
+};
+
 const TAB_DEFS: {
   name: TabName;
   label: string;
@@ -272,15 +279,16 @@ export default function App() {
         </nav>
       </div>
 
-      {
+      {/* Adds to whichever tab you're on; the profile has nothing to add to. */}
+      {tab !== 'profile' && (
         <button
           className="fixed right-4 bottom-[calc(--spacing(21)+env(safe-area-inset-bottom))] z-15 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full border border-border bg-primary text-primary-fg shadow-lg active:scale-95 desk:hidden"
           onClick={handleFab}
-          aria-label="Dodaj"
+          aria-label={FAB_LABEL[tab]}
         >
           <PlusIcon className="size-6" />
         </button>
-      }
+      )}
 
       {stack.map((sheet, i) => {
         const isTop = i === stack.length - 1;
