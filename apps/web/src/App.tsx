@@ -3,11 +3,14 @@ import {
   AlertIcon,
   ClientsIcon,
   ClockIcon,
+  DownloadIcon,
+  FilePlusIcon,
   InvoiceIcon,
   PlusIcon,
   SignOutIcon,
   UserIcon,
 } from './components/icons';
+import { exportInvoicesCsv } from './lib/exportInvoices';
 import { invoiceReadiness } from '@reckon/shared';
 import { useAuth } from './auth/context';
 import { ClientSheet } from './sheets/ClientSheet';
@@ -60,7 +63,7 @@ const TAB_DEFS: {
 ];
 
 export default function App() {
-  const { data } = useStore();
+  const { data, toast } = useStore();
   const { user, signOut } = useAuth();
   const [tab, setTab] = useState<Screen>('track');
   const [stack, setStack] = useState<SheetState[]>([]);
@@ -162,7 +165,33 @@ export default function App() {
           })}
         </nav>
 
-        <div className="mt-auto flex flex-col gap-1 border-t border-border pt-3">
+        <div className="mt-auto flex flex-col gap-1">
+          <div className="mb-1 px-2.5 pt-4 font-mono text-2xs font-semibold uppercase tracking-wider text-muted-fg">
+            Podatki
+          </div>
+          <button
+            className={navItem(false)}
+            onClick={() => openSheet({ kind: 'importInvoice' })}
+          >
+            <FilePlusIcon />
+            Uvozi račun
+          </button>
+          <button
+            className={navItem(false)}
+            onClick={() =>
+              toast(
+                exportInvoicesCsv(data)
+                  ? 'Računi izvoženi'
+                  : 'Ni računov za izvoz',
+              )
+            }
+          >
+            <DownloadIcon />
+            Izvozi račune (CSV)
+          </button>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-1 border-t border-border pt-3">
           {/* The account block: who you are, and the one thing that needs doing. */}
           <button
             className={
@@ -257,7 +286,7 @@ export default function App() {
             {tab === 'track' && <TrackView openSheet={openSheet} />}
             {tab === 'clients' && <ClientsView openSheet={openSheet} />}
             {tab === 'invoices' && <InvoicesView openSheet={openSheet} />}
-            {tab === 'profile' && <ProfileView />}
+            {tab === 'profile' && <ProfileView openSheet={openSheet} />}
           </div>
         </main>
 

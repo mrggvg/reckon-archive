@@ -12,8 +12,10 @@ import {
   BillingIcon,
   CheckCircleIcon,
   DownloadIcon,
+  FilePlusIcon,
   FileTextIcon,
   HardDriveIcon,
+  InvoiceIcon,
   SignOutIcon,
   SlidersIcon,
   UploadIcon,
@@ -22,6 +24,8 @@ import {
 import { Select } from '../components/Select';
 import { Field, SectionHead } from '../components/ui';
 import { downloadBlob } from '../lib/download';
+import { exportInvoicesCsv } from '../lib/exportInvoices';
+import type { OpenSheet } from '../lib/sheets';
 import { todayIso } from '../lib/format';
 import { DEFAULT_VAT_CLAUSE, normalize } from '../lib/storage';
 import type { Profile } from '../lib/types';
@@ -71,7 +75,7 @@ function Section({
  * to be read together — so it takes the same place Ure or Računi do rather
  * than arriving as a panel over them.
  */
-export function ProfileView() {
+export function ProfileView({ openSheet }: { openSheet: OpenSheet }) {
   const { data, update, replace, toast } = useStore();
   const { user, signOut } = useAuth();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -111,6 +115,10 @@ export function ProfileView() {
       d.profile = parsed.data;
     });
     toast('Podatki shranjeni');
+  };
+
+  const exportCsv = () => {
+    toast(exportInvoicesCsv(data) ? 'Računi izvoženi' : 'Ni računov za izvoz');
   };
 
   const downloadBackup = () => {
@@ -475,6 +483,29 @@ export function ProfileView() {
           </Field>
         </div>
       </Section>
+
+      {/* On a desktop these live in the sidebar, always within reach. */}
+      <div className="desk:hidden">
+        <Section
+          icon={<InvoiceIcon className="size-4" />}
+          title="Uvoz in izvoz računov"
+          description="Prenesite račune v preglednico ali zabeležite račun, ki ni bil izdan v aplikaciji."
+        >
+          <div className="flex flex-col gap-2 min-[520px]:flex-row">
+            <button
+              className={`${btn.outline} flex-1`}
+              onClick={() => openSheet({ kind: 'importInvoice' })}
+            >
+              <FilePlusIcon className="size-3.5" />
+              Uvozi račun
+            </button>
+            <button className={`${btn.outline} flex-1`} onClick={exportCsv}>
+              <DownloadIcon className="size-3.5" />
+              Izvozi račune (CSV)
+            </button>
+          </div>
+        </Section>
+      </div>
 
       <Section
         icon={<HardDriveIcon className="size-4" />}

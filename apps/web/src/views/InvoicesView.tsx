@@ -1,14 +1,11 @@
 import {
   AlertIcon,
-  DownloadIcon,
-  FilePlusIcon,
   InvoiceIcon,
   ListIcon,
   PlusIcon,
 } from '../components/icons';
 import { invoiceReadiness } from '@reckon/shared';
 import { EmptyState, SectionHead } from '../components/ui';
-import { downloadBlob, toCsv } from '../lib/download';
 import { fmtDMY, fmtMoney, plural, todayIso } from '../lib/format';
 import {
   STATUS_BADGE,
@@ -21,7 +18,7 @@ import { useStore } from '../store/context';
 import { badge, btn, btnSm, btnXs } from '../styles/cx';
 
 export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
-  const { data, toast } = useStore();
+  const { data } = useStore();
 
   const clientName = (id: string) =>
     data.clients.find((c) => c.id === id)?.name ?? 'Neznana stranka';
@@ -34,50 +31,6 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
         .map((s) => s.clientId),
     ),
   ];
-
-  const exportCsv = () => {
-    if (data.invoices.length === 0) {
-      toast('Ni računov za izvoz');
-      return;
-    }
-    const sorted = [...data.invoices].sort(
-      (a, b) => invoiceSortKey(a) - invoiceSortKey(b),
-    );
-    const rows: (string | number)[][] = [
-      [
-        'Številka',
-        'Stranka',
-        'Datum izdaje',
-        'Rok plačila',
-        'Opis',
-        'Obdobje od',
-        'Obdobje do',
-        'Znesek EUR',
-        'Status',
-        'Datum plačila',
-      ],
-    ];
-    sorted.forEach((inv) => {
-      rows.push([
-        inv.number,
-        clientName(inv.clientId),
-        inv.issueDate,
-        inv.dueDate,
-        inv.description,
-        inv.periodStart,
-        inv.periodEnd,
-        inv.total.toFixed(2),
-        invoiceStatusComputed(inv),
-        inv.paidDate ?? '',
-      ]);
-    });
-    downloadBlob(
-      toCsv(rows),
-      `invoices-export-${todayIso()}.csv`,
-      'text/csv;charset=utf-8;',
-    );
-    toast('Računi izvoženi');
-  };
 
   const sorted = [...data.invoices].sort(
     (a, b) => invoiceSortKey(b) - invoiceSortKey(a),
@@ -121,27 +74,6 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
           Nov račun
         </button>
       </SectionHead>
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          className={`${btn.outline} ${btnSm} flex-1`}
-          onClick={() =>
-            openSheet(
-              readiness.ready ? { kind: 'importInvoice' } : { kind: 'profile' },
-            )
-          }
-        >
-          <FilePlusIcon className="size-3.5" />
-          Uvozi obstoječi račun
-        </button>
-        <button
-          className={`${btn.outline} ${btnSm} flex-1`}
-          onClick={exportCsv}
-        >
-          <DownloadIcon className="size-3.5" />
-          Izvozi vse (CSV)
-        </button>
-      </div>
 
       {!readiness.ready && (
         <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-border bg-warning-bg p-4 text-sm leading-normal text-warning-fg">
