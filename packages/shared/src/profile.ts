@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { taxNumberSchema } from './client';
+import { taxNumberSchema } from './client.js';
 
 /**
  * The issuer's own details — the "Izvajalec" half of every invoice.

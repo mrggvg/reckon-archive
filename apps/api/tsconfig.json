@@ -4,12 +4,18 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": "../..",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "paths": { "@reckon/shared": ["../../packages/shared/src/index.ts"] }
+    "paths": {
+      "@reckon/shared": [
+        "../../packages/shared/src/index.ts"
+      ]
+    }
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

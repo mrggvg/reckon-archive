@@ -1,11 +1,14 @@
 import {
   AlertIcon,
+  CheckCircleIcon,
   InvoiceIcon,
   ListIcon,
   PlusIcon,
+  RepeatIcon,
 } from '../components/icons';
 import { invoiceReadiness } from '@reckon/shared';
 import { EmptyState, SectionHead } from '../components/ui';
+import { failureMessage } from '../lib/failure';
 import { fmtDMY, fmtMoney, plural, todayIso } from '../lib/format';
 import {
   STATUS_BADGE,
@@ -18,7 +21,7 @@ import { useStore } from '../store/context';
 import { badge, btn, btnSm, btnXs } from '../styles/cx';
 
 export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
-  const { data } = useStore();
+  const { data, setInvoicePaid, toast } = useStore();
 
   const clientName = (id: string) =>
     data.clients.find((c) => c.id === id)?.name ?? 'Neznana stranka';
@@ -31,6 +34,19 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
         .map((s) => s.clientId),
     ),
   ];
+
+  /**
+   * Payment is the most-changed thing about an invoice and it used to sit
+   * three levels deep — open the document, press one button, close it again.
+   * Here it is a control on the row, with the reverse always one tap away.
+   */
+  const togglePaid = (id: string, paid: boolean) => {
+    void setInvoicePaid(id, paid, paid ? todayIso() : null)
+      .then(() =>
+        toast(paid ? 'Označeno kot plačano' : 'Označeno kot neplačano'),
+      )
+      .catch((err: unknown) => toast(failureMessage(err)));
+  };
 
   const sorted = [...data.invoices].sort(
     (a, b) => invoiceSortKey(b) - invoiceSortKey(a),
@@ -155,26 +171,67 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
                 Izdan {fmtDMY(inv.issueDate)} · Rok {fmtDMY(inv.dueDate)}
               </div>
               <div className="mt-3 flex items-center justify-between gap-2">
+                {/* The state, which stays a label — "zapadlo" is not an action. */}
                 <span className={badge[STATUS_BADGE[status]]}>
                   {STATUS_LABEL[status]}
                 </span>
-                <span
-                  className={`${btn.outline} ${btnXs}`}
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openSheet({ kind: 'timesheet', id: inv.id });
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
+
+                {/*
+                  A nested <button> would be invalid inside the row's own
+                  button, so these controls carry the role and the keys
+                  themselves — the same shape the timesheet shortcut uses.
+                */}
+                <span className="ml-auto flex items-center gap-1.5">
+                  <span
+                    className={`${status === 'paid' ? btn.ghost : btn.outline} ${btnXs}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={
+                      status === 'paid'
+                        ? `Prekliči plačilo računa ${inv.number}`
+                        : `Označi račun ${inv.number} kot plačan`
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePaid(inv.id, status !== 'paid');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                        togglePaid(inv.id, status !== 'paid');
+                      }
+                    }}
+                  >
+                    {status === 'paid' ? (
+                      <>
+                        <RepeatIcon className="size-3" />
+                        Prekliči
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircleIcon className="size-3" />
+                        Plačano
+                      </>
+                    )}
+                  </span>
+                  <span
+                    className={`${btn.outline} ${btnXs}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
                       e.stopPropagation();
                       openSheet({ kind: 'timesheet', id: inv.id });
-                    }
-                  }}
-                >
-                  <ListIcon className="size-3" />
-                  Ure
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                        openSheet({ kind: 'timesheet', id: inv.id });
+                      }
+                    }}
+                  >
+                    <ListIcon className="size-3" />
+                    Ure
+                  </span>
                 </span>
               </div>
             </button>

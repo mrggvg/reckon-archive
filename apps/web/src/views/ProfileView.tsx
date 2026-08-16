@@ -24,6 +24,7 @@ import {
 import { Select } from '../components/Select';
 import { Field, SectionHead } from '../components/ui';
 import { downloadBlob } from '../lib/download';
+import { failureMessage } from '../lib/failure';
 import { exportInvoicesCsv } from '../lib/exportInvoices';
 import type { OpenSheet } from '../lib/sheets';
 import { todayIso } from '../lib/format';
@@ -76,7 +77,8 @@ function Section({
  * than arriving as a panel over them.
  */
 export function ProfileView({ openSheet }: { openSheet: OpenSheet }) {
-  const { data, update, replace, toast } = useStore();
+  const { data, saveProfile, restore, toast } = useStore();
+  const [saving, setSaving] = useState(false);
   const { user, signOut } = useAuth();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -104,17 +106,22 @@ export function ProfileView({ openSheet }: { openSheet: OpenSheet }) {
     );
   };
 
-  const save = () => {
+  const save = async () => {
     const parsed = profileSchema.safeParse(form);
     if (!parsed.success) {
       setErrors(fieldErrors(parsed.error));
       toast('Preverite označena polja');
       return;
     }
-    update((d) => {
-      d.profile = parsed.data;
-    });
-    toast('Podatki shranjeni');
+    setSaving(true);
+    try {
+      await saveProfile(parsed.data);
+      toast('Podatki shranjeni');
+    } catch (err) {
+      toast(failureMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const exportCsv = () => {
@@ -146,13 +153,18 @@ export function ProfileView({ openSheet }: { openSheet: OpenSheet }) {
         ) {
           return;
         }
-        const restored = normalize(parsed);
-        replace(restored);
-        setForm({
-          ...restored.profile,
-          vatClause: restored.profile.vatClause || DEFAULT_VAT_CLAUSE,
-        });
-        toast('Podatki obnovljeni');
+        // Sent to the server as one transaction: the account comes back as
+        // the file describes it, or not at all.
+        const normalised = normalize(parsed);
+        void restore(normalised)
+          .then(() => {
+            setForm({
+              ...normalised.profile,
+              vatClause: normalised.profile.vatClause || DEFAULT_VAT_CLAUSE,
+            });
+            toast('Podatki obnovljeni');
+          })
+          .catch((err: unknown) => toast(failureMessage(err)));
       } catch {
         toast('Datoteke ni bilo mogoče prebrati');
       }
@@ -179,8 +191,8 @@ export function ProfileView({ openSheet }: { openSheet: OpenSheet }) {
           )}
           <button
             className={`${btn.primary} ${btnSm}`}
-            onClick={save}
-            disabled={!dirty}
+            onClick={() => void save()}
+            disabled={saving || !dirty}
           >
             Shrani
           </button>
@@ -538,8 +550,8 @@ export function ProfileView({ openSheet }: { openSheet: OpenSheet }) {
       <div className="mb-4 flex flex-col gap-2 min-[520px]:flex-row-reverse">
         <button
           className={`${btn.primary} min-[520px]:w-40`}
-          onClick={save}
-          disabled={!dirty}
+          onClick={() => void save()}
+          disabled={saving || !dirty}
         >
           {dirty ? 'Shrani' : 'Shranjeno'}
         </button>

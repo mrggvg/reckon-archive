@@ -3,6 +3,7 @@ import {
   CalendarIcon,
   ClockIcon,
   EditIcon,
+  InvoiceIcon,
   ListIcon,
   PlusIcon,
   RepeatIcon,
@@ -11,22 +12,30 @@ import {
 import { EmptyState, SectionHead } from '../components/ui';
 import {
   clientColor,
+  fmtDMY,
   fmtDateLabel,
   fmtHours,
+  fmtMoney,
   hoursBetween,
   plural,
   todayIso,
 } from '../lib/format';
+import {
+  alreadyLogged,
+  shiftSuggestions,
+  unbilledByClient,
+  type ShiftSuggestion,
+} from '../lib/suggestions';
+import { failureMessage } from '../lib/failure';
 import type { OpenSheet } from '../lib/sheets';
 import { BILLING_LABEL, sessionBillingLabel } from '../lib/invoice';
-import { uid } from '../lib/storage';
-import { btn, btnSm, chip, iconBtn, rowActions, tabSeg } from '../styles/cx';
+import { btn, btnSm, cardLabel, chip, iconBtn, rowActions, tabSeg } from '../styles/cx';
 import type { Session } from '../lib/types';
 import { useStore } from '../store/context';
 import { CalendarView } from './CalendarView';
 
 export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
-  const { data, update, toast } = useStore();
+  const { data, createSession, removeSession, toast } = useStore();
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [filter, setFilter] = useState<string>('all');
 
@@ -70,48 +79,54 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
       }));
   }, [visible]);
 
-  const deleteEntry = (id: string) => {
+  const deleteEntry = async (id: string) => {
     const s = data.sessions.find((x) => x.id === id);
     if (s?.invoiced) {
       toast('Vnosa ni mogoče izbrisati — je že na računu');
       return;
     }
-    update((d) => {
-      d.sessions = d.sessions.filter((x) => x.id !== id);
-    });
+    try {
+      await removeSession(id);
+    } catch (err) {
+      toast(failureMessage(err));
+    }
   };
 
-  const repeatLast = () => {
-    const sorted = [...data.sessions].sort((a, b) =>
-      (a.date + a.start).localeCompare(b.date + b.start),
-    );
-    const last = sorted[sorted.length - 1];
-    if (!last) return;
+  const suggestions = useMemo(
+    () => shiftSuggestions(data.sessions, data.clients),
+    [data.sessions, data.clients],
+  );
+
+  const pending = useMemo(
+    () => unbilledByClient(data.sessions, data.clients),
+    [data.sessions, data.clients],
+  );
+
+  /**
+   * The whole point of the chips: a shift you work often takes one tap, not a
+   * form. The same day's identical entry is refused rather than duplicated,
+   * because a double tap should not quietly bill the client twice.
+   */
+  const quickLog = (shift: ShiftSuggestion) => {
     const today = todayIso();
-    const dupe = data.sessions.some(
-      (s) =>
-        s.date === today &&
-        s.clientId === last.clientId &&
-        s.start === last.start &&
-        s.end === last.end,
-    );
-    if (dupe) {
+    const entry = {
+      clientId: shift.clientId,
+      date: today,
+      start: shift.start,
+      end: shift.end,
+    };
+    if (alreadyLogged(data.sessions, entry)) {
       toast('Ta vnos za danes že obstaja');
       return;
     }
-    update((d) => {
-      d.sessions.push({
-        id: uid('ws'),
-        clientId: last.clientId,
-        date: today,
-        start: last.start,
-        end: last.end,
-        note: last.note || '',
-        invoiced: false,
-        invoiceId: null,
-      });
-    });
-    toast('Vnos ponovljen za danes');
+    void (async () => {
+      try {
+        await createSession({ ...entry, note: '' });
+        toast(`${shift.clientName}: ${shift.start}–${shift.end} zabeleženo`);
+      } catch (err) {
+        toast(failureMessage(err));
+      }
+    })();
   };
 
   return (
@@ -133,12 +148,22 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
         </button>
       </SectionHead>
 
-      {data.sessions.length > 0 && (
-        <div className="mb-3 flex items-stretch gap-2">
-          <button className={`${btn.outline} ${btnSm}`} onClick={repeatLast}>
-            <RepeatIcon className="size-3.5" />
-            Ponovi zadnji vnos
-          </button>
+      {suggestions.length > 0 && (
+        <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+          {suggestions.map((s) => (
+            <button
+              key={s.clientId}
+              className={`${btn.outline} ${btnSm} shrink-0`}
+              onClick={() => quickLog(s)}
+              title={`Zabeleži ${s.start}–${s.end} za danes`}
+            >
+              <RepeatIcon className="size-3.5" />
+              <span className="max-w-32 truncate">{s.clientName}</span>
+              <span className="font-mono text-muted-fg">
+                {s.start}–{s.end}
+              </span>
+            </button>
+          ))}
         </div>
       )}
 
@@ -207,6 +232,44 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
                   </div>
                 </div>
               </div>
+
+              {/*
+                Who is owed an invoice, answered here rather than by filtering
+                to each client in turn — and billable from the same line, with
+                the client and their hours already chosen.
+              */}
+              {pending.length > 0 && (
+                <div className="mb-4 rounded-2xl border border-border bg-card p-4 shadow-xs">
+                  <div className={cardLabel}>Za obračun</div>
+                  {pending.map((p) => (
+                    <div
+                      className="flex items-center justify-between gap-3 border-t border-border pt-2.5 first:border-t-0 first:pt-0 [&+&]:mt-2.5"
+                      key={p.clientId}
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold">{p.name}</div>
+                        <div className="mt-0.5 font-mono text-2xs text-muted-fg">
+                          {fmtHours(p.hours)} · od {fmtDMY(p.since)}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="font-mono text-sm font-semibold">
+                          {fmtMoney(p.amount)}
+                        </span>
+                        <button
+                          className={`${btn.primary} ${btnSm}`}
+                          onClick={() =>
+                            openSheet({ kind: 'newInvoice', clientId: p.clientId })
+                          }
+                        >
+                          <InvoiceIcon className="size-3.5" />
+                          Izstavi
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {byDate.map(({ date, items }) => {
                 const dayTotal = items.reduce(

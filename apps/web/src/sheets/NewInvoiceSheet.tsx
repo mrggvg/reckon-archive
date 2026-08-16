@@ -10,12 +10,12 @@ import {
   hoursBetween,
   todayIso,
 } from '../lib/format';
-import { nextInvoiceNumber } from '../lib/invoice';
-import { uid } from '../lib/storage';
+import { defaultClientId, selectableClients } from '../lib/clients';
 import { useStore } from '../store/context';
 import { btn, btnBlock, field, hint, input, label, row2 } from '../styles/cx';
 import { Select } from '../components/Select';
 import { DateField } from '../components/DateField';
+import { failureMessage } from '../lib/failure';
 import type { OpenSheet } from '../lib/sheets';
 
 export function NewInvoiceSheet({
@@ -29,9 +29,10 @@ export function NewInvoiceSheet({
   openSheet?: OpenSheet;
   replaceSheet?: OpenSheet;
 }) {
-  const { data, update, toast } = useStore();
+  const { data, generateInvoice, toast } = useStore();
+  const [saving, setSaving] = useState(false);
   const [clientId, setClientId] = useState(
-    initialClientId ?? data.clients[0]?.id ?? '',
+    initialClientId ?? defaultClientId(data.clients),
   );
   const [description, setDescription] = useState(data.profile.defaultDesc || '');
   const [issueDate, setIssueDate] = useState(todayIso());
@@ -52,51 +53,29 @@ export function NewInvoiceSheet({
   const toggle = (id: string) =>
     setUnchecked((u) => (u.includes(id) ? u.filter((x) => x !== id) : [...u, id]));
 
-  const generate = () => {
+  /**
+   * The total, the period and the number all come back from the server: it
+   * prices the invoice from the hours it locks, and the number is only really
+   * decided once the unique index accepts it.
+   */
+  const generate = async () => {
     if (checkedIds.length === 0) return;
-    const client = data.clients.find((c) => c.id === clientId);
-    if (!client) return;
-
-    const records = checkedIds.map((id) => {
-      const s = data.sessions.find((x) => x.id === id);
-      return { date: s?.date ?? '', hours: s ? hoursBetween(s.start, s.end) : 0 };
-    });
-    const totalHours = records.reduce((sum, r) => sum + r.hours, 0);
-    const dates = records.map((r) => r.date).sort();
-    const number = nextInvoiceNumber(
-      data.invoices,
-      data.profile.nextInvoiceNumber,
-      issueDate,
-    );
-    const id = uid('inv');
-
-    update((d) => {
-      d.invoices.push({
-        id,
-        number,
+    setSaving(true);
+    try {
+      const invoice = await generateInvoice({
         clientId,
+        sessionIds: checkedIds,
         issueDate,
         dueDate,
-        description: description.trim() || 'Storitve',
-        periodStart: dates[0] ?? issueDate,
-        periodEnd: dates[dates.length - 1] ?? issueDate,
-        sessionIds: checkedIds,
-        totalHours,
-        rate: client.rate,
-        total: totalHours * client.rate,
-        status: 'unpaid',
-        paidDate: null,
+        description: description.trim(),
       });
-      checkedIds.forEach((sid) => {
-        const s = d.sessions.find((x) => x.id === sid);
-        if (s) {
-          s.invoiced = true;
-          s.invoiceId = id;
-        }
-      });
-    });
-    toast('Račun ' + number + ' ustvarjen');
-    onClose();
+      toast('Račun ' + invoice.number + ' ustvarjen');
+      onClose();
+    } catch (err) {
+      toast(failureMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const readiness = invoiceReadiness(data.profile);
@@ -138,8 +117,8 @@ export function NewInvoiceSheet({
       footer={
         <button
           className={`${btn.primary} ${btnBlock}`}
-          disabled={checkedIds.length === 0}
-          onClick={generate}
+          disabled={saving || checkedIds.length === 0}
+          onClick={() => void generate()}
         >
           Ustvari račun
         </button>
@@ -153,7 +132,7 @@ export function NewInvoiceSheet({
             setClientId(v);
             setUnchecked([]);
           }}
-          options={data.clients.map((c) => ({
+          options={selectableClients(data.clients, clientId).map((c) => ({
             value: c.id,
             label: c.name,
             hint: `${fmtMoney(c.rate)}/h`,

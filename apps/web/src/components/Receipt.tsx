@@ -61,11 +61,21 @@ export function Receipt({
           </div>
           <div className="party">
             <div className="label">Naročnik</div>
-            <div className="party-name">{client ? client.name : '—'}</div>
-            <div className="party-line">{client ? formatAddress(client) : ''}</div>
+            {/*
+              The snapshot the invoice was issued with comes first: renaming a
+              client, or deactivating one, must not rewrite a document that has
+              already been sent. The live record is only a fallback for invoices
+              recorded before the snapshot existed.
+            */}
+            <div className="party-name">
+              {invoice.clientName || client?.name || '—'}
+            </div>
+            <div className="party-line">
+              {invoice.clientAddress || (client ? formatAddress(client) : '')}
+            </div>
             <div className="party-line">
               <span className="k">Davčna številka:</span>{' '}
-              {client ? client.taxNumber || '—' : '—'}
+              {invoice.clientTaxNumber || client?.taxNumber || '—'}
             </div>
           </div>
         </div>

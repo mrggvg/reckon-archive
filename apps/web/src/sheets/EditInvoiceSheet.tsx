@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Field, Sheet } from '../components/ui';
+import { failureMessage } from '../lib/failure';
+import { selectableClients } from '../lib/clients';
 import { useStore } from '../store/context';
 import { btn, btnBlock, hint, input, row2 } from '../styles/cx';
 import { Select } from '../components/Select';
@@ -15,7 +17,8 @@ export function EditInvoiceSheet({
   onClose: () => void;
   openSheet?: OpenSheet;
 }) {
-  const { data, update, toast } = useStore();
+  const { data, updateInvoice, toast } = useStore();
+  const [saving, setSaving] = useState(false);
   const inv = data.invoices.find((i) => i.id === id);
 
   const [number, setNumber] = useState(inv?.number ?? '');
@@ -37,7 +40,7 @@ export function EditInvoiceSheet({
 
   const isImported = !inv.sessionIds || inv.sessionIds.length === 0;
 
-  const save = () => {
+  const save = async () => {
     if (!number.trim()) {
       toast('Številka računa je obvezna');
       return;
@@ -46,21 +49,31 @@ export function EditInvoiceSheet({
       toast('Ta številka računa je že v uporabi');
       return;
     }
-    update((d) => {
-      const target = d.invoices.find((i) => i.id === id);
-      if (!target) return;
-      target.number = number.trim();
-      target.description = description.trim() || 'Storitve';
-      target.issueDate = issueDate || target.issueDate;
-      target.dueDate = dueDate || target.dueDate;
-      if (isImported) {
-        target.clientId = clientId;
-        target.periodStart = periodStart || target.periodStart;
-        target.periodEnd = periodEnd || target.periodEnd;
-        const parsed = parseFloat(total);
-        if (!isNaN(parsed)) target.total = parsed;
-      }
-    });
+    setSaving(true);
+    try {
+      // The client, period and total of an invoice generated from hours are
+      // facts about those hours; the server refuses to let them drift.
+      const parsedTotal = parseFloat(total);
+      await updateInvoice(id, {
+        number: number.trim(),
+        description: description.trim(),
+        ...(issueDate ? { issueDate } : {}),
+        ...(dueDate ? { dueDate } : {}),
+        ...(isImported
+          ? {
+              clientId,
+              ...(periodStart ? { periodStart } : {}),
+              ...(periodEnd ? { periodEnd } : {}),
+              ...(isNaN(parsedTotal) ? {} : { total: parsedTotal }),
+            }
+          : {}),
+      });
+    } catch (err) {
+      toast(failureMessage(err));
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
     toast('Račun posodobljen');
     onClose();
   };
@@ -70,7 +83,8 @@ export function EditInvoiceSheet({
       title="Uredi račun"
       onClose={onClose}
       footer={
-        <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
+        <button className={`${btn.primary} ${btnBlock}`} onClick={() => void save()}
+            disabled={saving}>
           Shrani spremembe
         </button>
       }
@@ -120,7 +134,10 @@ export function EditInvoiceSheet({
               id="editInvClient"
               value={clientId}
               onChange={setClientId}
-              options={data.clients.map((c) => ({ value: c.id, label: c.name }))}
+              options={selectableClients(data.clients, clientId).map((c) => ({
+                value: c.id,
+                label: c.name,
+              }))}
               action={{
                 label: 'Dodaj novo stranko',
                 onSelect: () =>

@@ -7,11 +7,14 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "vitest run",
+    "test": "tsx --test test/*.test.ts",
     "db:up": "docker compose -f ../../db/compose.yaml up -d --wait",
     "db:down": "docker compose -f ../../db/compose.yaml down",
-    "db:reset": "docker compose -f ../../db/compose.yaml exec -T db psql -U reckon -d reckon -v ON_ERROR_STOP=1 -f /db/schema.sql -f /db/seed.sql",
-    "db:psql": "docker compose -f ../../db/compose.yaml exec db psql -U reckon -d reckon"
+    "db:reset": "node ../../scripts/migrate.mjs --reset && docker compose -f ../../db/compose.yaml exec -T db psql -U reckon -d reckon -v ON_ERROR_STOP=1 -f /db/seed.sql",
+    "db:psql": "docker compose -f ../../db/compose.yaml exec db psql -U reckon -d reckon",
+    "db:migrate": "node ../../scripts/migrate.mjs",
+    "db:status": "node ../../scripts/migrate.mjs --status",
+    "user:password": "tsx scripts/set-password.ts"
   },
   "dependencies": {
     "connect-pg-simple": "^10.0.0",

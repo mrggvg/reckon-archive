@@ -1,5 +1,5 @@
-import { taxNumberSchema } from './client';
-import { ibanSchema } from './profile';
+import { taxNumberSchema } from './client.js';
+import { ibanSchema } from './profile.js';
 
 export interface MissingField {
   /** Matches the profile form's field id, so the message can point at it. */

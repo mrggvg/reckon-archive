@@ -3,6 +3,7 @@ import { EditIcon, ListIcon, PrinterIcon, TrashIcon } from '../components/icons'
 import { Sheet } from '../components/ui';
 import { todayIso } from '../lib/format';
 import type { OpenSheet } from '../lib/sheets';
+import { failureMessage } from '../lib/failure';
 import { useStore } from '../store/context';
 import { btn, btnBlock, btnSm, hint } from '../styles/cx';
 
@@ -17,7 +18,7 @@ export function ViewInvoiceSheet({
   openSheet: OpenSheet;
   replaceSheet: OpenSheet;
 }) {
-  const { data, update, toast } = useStore();
+  const { data, setInvoicePaid, removeInvoice, toast } = useStore();
   const inv = data.invoices.find((i) => i.id === id);
 
   if (!inv) {
@@ -32,28 +33,21 @@ export function ViewInvoiceSheet({
 
   const togglePaid = () => {
     const nowPaid = inv.status !== 'paid';
-    update((d) => {
-      const target = d.invoices.find((i) => i.id === id);
-      if (!target) return;
-      target.status = nowPaid ? 'paid' : 'unpaid';
-      target.paidDate = nowPaid ? todayIso() : null;
-    });
-    toast(nowPaid ? 'Označeno kot plačano' : 'Označeno kot neplačano');
+    void setInvoicePaid(id, nowPaid, nowPaid ? todayIso() : null)
+      .then(() => toast(nowPaid ? 'Označeno kot plačano' : 'Označeno kot neplačano'))
+      .catch((err: unknown) => toast(failureMessage(err)));
   };
 
   const remove = () => {
     if (!confirm('Izbrišem ta račun? Njegove ure bodo spet neobračunane.')) return;
-    update((d) => {
-      d.sessions.forEach((s) => {
-        if (s.invoiceId === id) {
-          s.invoiced = false;
-          s.invoiceId = null;
-        }
-      });
-      d.invoices = d.invoices.filter((i) => i.id !== id);
-    });
-    toast('Račun izbrisan');
-    onClose();
+    // Deleting the invoice is what frees its hours; the store re-reads the
+    // ledger afterwards rather than assuming which ones came back.
+    void removeInvoice(id)
+      .then(() => {
+        toast('Račun izbrisan');
+        onClose();
+      })
+      .catch((err: unknown) => toast(failureMessage(err)));
   };
 
   return (

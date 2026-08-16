@@ -180,9 +180,11 @@ export function Select({
 
           {action && (
             <li
+              // No rule above it — the gap and the primary colour already set
+              // it apart from the choices.
               className={
-                'flex cursor-pointer items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium text-primary desk:py-2 ' +
-                (options.length > 0 ? 'mt-1 border-t border-border pt-2.5' : '')
+                'flex cursor-pointer items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium text-primary hover:bg-muted desk:py-2 ' +
+                (options.length > 0 ? 'mt-2' : '')
               }
               onClick={() => {
                 setOpen(false);

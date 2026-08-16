@@ -1,5 +1,6 @@
 import App from '../App';
 import { StoreProvider } from '../store/StoreProvider';
+import { LedgerGate } from '../store/LedgerGate';
 import { AuthScreen } from './AuthScreen';
 import { useAuth } from './context';
 
@@ -20,7 +21,9 @@ export function AuthGate() {
   // carrying one person's ledger into another's session.
   return (
     <StoreProvider key={user.id} userId={user.id}>
-      <App />
+      <LedgerGate>
+        <App />
+      </LedgerGate>
     </StoreProvider>
   );
 }

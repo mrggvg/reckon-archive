@@ -3,11 +3,12 @@ import { invoiceReadiness } from '@reckon/shared';
 import { ProfileRequired } from '../components/ProfileRequired';
 import { PlusIcon } from '../components/icons';
 import { Field, Sheet } from '../components/ui';
-import { uid } from '../lib/storage';
+import { defaultClientId, selectableClients } from '../lib/clients';
 import { useStore } from '../store/context';
 import { btn, btnBlock, hint, input, row2 } from '../styles/cx';
 import { Select } from '../components/Select';
 import { DateField } from '../components/DateField';
+import { failureMessage } from '../lib/failure';
 import type { OpenSheet } from '../lib/sheets';
 
 export function ImportInvoiceSheet({
@@ -19,8 +20,9 @@ export function ImportInvoiceSheet({
   openSheet?: OpenSheet;
   replaceSheet?: OpenSheet;
 }) {
-  const { data, update, toast } = useStore();
-  const [clientId, setClientId] = useState(data.clients[0]?.id ?? '');
+  const { data, importInvoice, toast } = useStore();
+  const [saving, setSaving] = useState(false);
+  const [clientId, setClientId] = useState(defaultClientId(data.clients));
   const [number, setNumber] = useState('');
   const [total, setTotal] = useState('');
   const [description, setDescription] = useState(data.profile.defaultDesc || '');
@@ -31,41 +33,39 @@ export function ImportInvoiceSheet({
   const [status, setStatus] = useState<'unpaid' | 'paid'>('unpaid');
   const [paidDate, setPaidDate] = useState('');
 
-  const save = () => {
+  const save = async () => {
     const totalNum = parseFloat(total);
     if (!number.trim()) {
       toast('Številka računa je obvezna');
-      return;
-    }
-    if (data.invoices.some((i) => i.number === number.trim())) {
-      toast('Račun s to številko že obstaja');
       return;
     }
     if (!issueDate || isNaN(totalNum)) {
       toast('Datum izdaje in znesek sta obvezna');
       return;
     }
-    update((d) => {
-      d.invoices.push({
-        id: uid('inv'),
+    setSaving(true);
+    try {
+      // Uniqueness of the number is the database's to enforce, not a check
+      // against whatever this browser happens to have loaded.
+      const invoice = await importInvoice({
         number: number.trim(),
         clientId,
         issueDate,
         dueDate: dueDate || issueDate,
-        description: description.trim() || 'Storitve',
+        description: description.trim(),
         periodStart: periodStart || issueDate,
         periodEnd: periodEnd || issueDate,
-        sessionIds: [],
-        totalHours: null,
-        rate: null,
         total: totalNum,
         status,
         paidDate: status === 'paid' ? paidDate || issueDate : null,
-        imported: true,
       });
-    });
-    toast('Račun ' + number.trim() + ' dodan');
-    onClose();
+      toast('Račun ' + invoice.number + ' dodan');
+      onClose();
+    } catch (err) {
+      toast(failureMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const readiness = invoiceReadiness(data.profile);
@@ -105,7 +105,8 @@ export function ImportInvoiceSheet({
       title="Uvoz računa"
       onClose={onClose}
       footer={
-        <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
+        <button className={`${btn.primary} ${btnBlock}`} onClick={() => void save()}
+            disabled={saving}>
           Dodaj v zgodovino
         </button>
       }
@@ -119,7 +120,10 @@ export function ImportInvoiceSheet({
           id="impClient"
           value={clientId}
           onChange={setClientId}
-          options={data.clients.map((c) => ({ value: c.id, label: c.name }))}
+          options={selectableClients(data.clients, clientId).map((c) => ({
+            value: c.id,
+            label: c.name,
+          }))}
           action={{
             label: 'Dodaj novo stranko',
             onSelect: () =>

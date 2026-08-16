@@ -1,14 +1,6 @@
 import { parseAddressLine } from '@reckon/shared';
 import type { AppData, Client, Profile } from './types';
 
-/** Pre-auth key, from when the app was single-user and browser-local. */
-const LEGACY_KEY = 'delovnik-data-v1';
-
-/** Data is namespaced per account so a shared browser can't cross accounts. */
-export function storeKey(userId: string): string {
-  return `reckon:${userId}:data-v1`;
-}
-
 export const DEFAULT_VAT_CLAUSE =
   'Nisem zavezanec za DDV po 1. odstavku 94. člena ZDDV-1.';
 
@@ -75,44 +67,15 @@ function migrateProfile(
   return { ...rest, ...parseAddressLine(address) };
 }
 
-/** Clients saved before the address was split still carry a single line. */
+/**
+ * Clients saved before the address was split still carry a single line, and
+ * those saved before clients could be deactivated carry no flag — a backup
+ * that predates a column restores as though the column had always said yes.
+ */
 function migrateClient(c: Client & { address?: string }): Client {
-  if (c.street !== undefined) return c;
-  const { address, ...rest } = c;
+  const withFlag: Client & { address?: string } = { ...c, isActive: c.isActive ?? true };
+  if (withFlag.street !== undefined) return withFlag;
+  const { address, ...rest } = withFlag;
   return { ...rest, ...parseAddressLine(address ?? '') };
 }
 
-export function loadData(userId: string): AppData {
-  try {
-    const raw = localStorage.getItem(storeKey(userId));
-    if (raw) return normalize(JSON.parse(raw));
-
-    // One-time adoption: a ledger created before accounts existed belongs to
-    // whoever signs in on this browser first. It is moved, not copied.
-    const legacy = localStorage.getItem(LEGACY_KEY);
-    if (legacy) {
-      const adopted = normalize(JSON.parse(legacy));
-      localStorage.setItem(storeKey(userId), JSON.stringify(adopted));
-      localStorage.removeItem(LEGACY_KEY);
-      return adopted;
-    }
-    return emptyData();
-  } catch {
-    return emptyData();
-  }
-}
-
-export function saveData(userId: string, data: AppData): boolean {
-  try {
-    localStorage.setItem(storeKey(userId), JSON.stringify(data));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function uid(prefix: string): string {
-  return (
-    prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
-  );
-}

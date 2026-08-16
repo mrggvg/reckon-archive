@@ -28,6 +28,8 @@ export interface Client {
   rate: number;
   email: string;
   phone: string;
+  /** Deactivated clients stay in the history but leave the pickers. */
+  isActive: boolean;
 }
 
 export interface Session {
@@ -59,6 +61,14 @@ export interface Invoice {
   status: 'paid' | 'unpaid';
   paidDate: string | null;
   imported?: boolean;
+  /**
+   * The customer as printed when the invoice was issued. An invoice is a
+   * document about a past transaction: editing the client record afterwards
+   * must not rewrite what was sent.
+   */
+  clientName?: string;
+  clientAddress?: string;
+  clientTaxNumber?: string;
 }
 
 export interface AppData {

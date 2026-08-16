@@ -2,10 +2,12 @@ import {
   ClientsIcon,
   EditIcon,
   PlusIcon,
+  RepeatIcon,
   TrashIcon,
 } from '../components/icons';
 import { formatAddress } from '@reckon/shared';
 import { EmptyState, SectionHead } from '../components/ui';
+import { failureMessage, } from '../lib/failure';
 import { plural } from '../lib/format';
 import { btn, btnSm, iconBtn, rowActions } from '../styles/cx';
 import { fmtMoney } from '../lib/format';
@@ -13,20 +15,36 @@ import type { OpenSheet } from '../lib/sheets';
 import { useStore } from '../store/context';
 
 export function ClientsView({ openSheet }: { openSheet: OpenSheet }) {
-  const { data, update, toast } = useStore();
+  const { data, removeClient, setClientActive, toast } = useStore();
 
-  const remove = (id: string) => {
+  /**
+   * A client that has been worked for or invoiced is deactivated rather than
+   * deleted — the hours behind an issued invoice have to keep pointing at
+   * someone. Only a client nothing refers to is actually removed.
+   */
+  const remove = async (id: string) => {
     if (
       !confirm(
-        'Izbrišem to stranko? Zabeležene ure ostanejo, a bodo brez stranke.',
+        'Odstranim to stranko? Če ima zabeležene ure ali račune, bo le označena kot neaktivna.',
       )
     ) {
       return;
     }
-    update((d) => {
-      d.clients = d.clients.filter((c) => c.id !== id);
-    });
-    toast('Stranka izbrisana');
+    try {
+      const deactivated = await removeClient(id);
+      toast(deactivated ? 'Stranka označena kot neaktivna' : 'Stranka izbrisana');
+    } catch (err) {
+      toast(failureMessage(err));
+    }
+  };
+
+  const reactivate = async (id: string) => {
+    try {
+      await setClientActive(id, true);
+      toast('Stranka je spet aktivna');
+    } catch (err) {
+      toast(failureMessage(err));
+    }
   };
 
   return (
@@ -64,11 +82,21 @@ export function ClientsView({ openSheet }: { openSheet: OpenSheet }) {
       ) : (
         data.clients.map((c) => (
           <div
-            className="mb-3 flex items-start justify-between gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs"
+            className={
+              'mb-3 flex items-start justify-between gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs ' +
+              (c.isActive ? '' : 'opacity-60')
+            }
             key={c.id}
           >
             <div>
-              <div className="text-base font-semibold">{c.name}</div>
+              <div className="flex items-center gap-2">
+                <span className="text-base font-semibold">{c.name}</span>
+                {!c.isActive && (
+                  <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-2xs uppercase tracking-wider text-muted-fg">
+                    neaktivna
+                  </span>
+                )}
+              </div>
               <div className="mt-0.5 text-sm text-muted-fg">
                 {formatAddress(c) || 'Naslov ni vnesen'}
               </div>
@@ -89,13 +117,23 @@ export function ClientsView({ openSheet }: { openSheet: OpenSheet }) {
               >
                 <EditIcon className="size-4" />
               </button>
-              <button
-                className={iconBtn}
-                onClick={() => remove(c.id)}
-                aria-label="Izbriši stranko"
-              >
-                <TrashIcon className="size-4" />
-              </button>
+              {c.isActive ? (
+                <button
+                  className={iconBtn}
+                  onClick={() => void remove(c.id)}
+                  aria-label="Odstrani stranko"
+                >
+                  <TrashIcon className="size-4" />
+                </button>
+              ) : (
+                <button
+                  className={iconBtn}
+                  onClick={() => void reactivate(c.id)}
+                  aria-label="Ponovno aktiviraj stranko"
+                >
+                  <RepeatIcon className="size-4" />
+                </button>
+              )}
             </div>
           </div>
         ))

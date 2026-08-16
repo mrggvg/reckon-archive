@@ -1,5 +1,6 @@
 import { PlusIcon } from '../components/icons';
 import { Sheet } from '../components/ui';
+import { failureMessage } from '../lib/failure';
 import { fmtDateLabel, fmtHours, hoursBetween } from '../lib/format';
 import type { OpenSheet } from '../lib/sheets';
 import { useStore } from '../store/context';
@@ -16,7 +17,7 @@ export function DayDetailSheet({
   openSheet: OpenSheet;
   replaceSheet: OpenSheet;
 }) {
-  const { data, update, toast } = useStore();
+  const { data, removeSession, toast } = useStore();
 
   const sessions = data.sessions
     .filter((s) => s.date === date)
@@ -29,9 +30,7 @@ export function DayDetailSheet({
       toast('Vnosa ni mogoče izbrisati — je že na računu');
       return;
     }
-    update((d) => {
-      d.sessions = d.sessions.filter((x) => x.id !== id);
-    });
+    void removeSession(id).catch((err: unknown) => toast(failureMessage(err)));
   };
 
   return (

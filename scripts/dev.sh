@@ -143,6 +143,7 @@ fi
 
 # ── database ─────────────────────────────────────────────────────────────────
 psql_db() { docker compose -f "$COMPOSE" exec -T db psql -U reckon -d reckon "$@"; }
+DEV_DATABASE_URL="postgres://reckon:reckon@localhost:5432/reckon"
 
 if [ "$START_DB" -eq 1 ]; then
   command -v docker >/dev/null || die "docker is not installed (or use --no-db)"
@@ -152,12 +153,16 @@ if [ "$START_DB" -eq 1 ]; then
   docker compose -f "$COMPOSE" up -d --wait >/dev/null
   info "postgres://reckon:reckon@localhost:5432/reckon"
 
-  # First run, or --reset: lay down schema and fixtures.
-  has_tables="$(psql_db -tAc "select to_regclass('public.users') is not null" 2>/dev/null || echo f)"
-  if [ "$RESET" -eq 1 ] || [ "$has_tables" != "t" ]; then
-    step "Applying schema + seed"
-    psql_db -v ON_ERROR_STOP=1 -q -f /db/schema.sql -f /db/seed.sql >/dev/null
+  # Migrations are cheap and idempotent, so they run every time; only --reset
+  # throws the data away first.
+  step "Applying migrations"
+  if [ "$RESET" -eq 1 ]; then
+    DATABASE_URL="$DEV_DATABASE_URL" node "$ROOT/scripts/migrate.mjs" --reset
+    step "Seeding fixtures"
+    psql_db -v ON_ERROR_STOP=1 -q -f /db/seed.sql >/dev/null
     info "Sign in with dev@reckon.local / reckon-dev-password"
+  else
+    DATABASE_URL="$DEV_DATABASE_URL" node "$ROOT/scripts/migrate.mjs"
   fi
 fi
 

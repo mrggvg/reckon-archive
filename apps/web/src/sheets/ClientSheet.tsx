@@ -1,12 +1,16 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   POSTAL_CODE_LENGTH,
   TAX_NUMBER_LENGTH,
   clientSchema,
   fieldErrors,
+  taxNumberSchema,
 } from '@reckon/shared';
+import { SearchIcon } from '../components/icons';
+import { ApiError } from '../lib/api';
+import { resources } from '../lib/resources';
 import { Field, Sheet } from '../components/ui';
-import { uid } from '../lib/storage';
+import { failureMessage } from '../lib/failure';
 import type { Client } from '../lib/types';
 import { useStore } from '../store/context';
 import { btn, btnBlock, cardLabel, input } from '../styles/cx';
@@ -25,7 +29,11 @@ export function ClientSheet({
   onCreated?: (id: string) => void;
   onClose: () => void;
 }) {
-  const { update, toast } = useStore();
+  const { createClient, updateClient, toast } = useStore();
+  const [saving, setSaving] = useState(false);
+  const [looking, setLooking] = useState(false);
+  // Whatever was last asked about, so a second keystroke can't ask again.
+  const asked = useRef('');
   const [form, setForm] = useState({
     name: editing?.name ?? '',
     street: editing?.street ?? '',
@@ -46,9 +54,54 @@ export function ClientSheet({
     );
   };
 
-  const created = uid('cl');
+  /**
+   * Fills the company's details from its tax number.
+   *
+   * The register is the authority on how a company is called and where it
+   * sits, and getting either wrong on an invoice is the user's problem, not
+   * the register's. What comes back is put in the form, not saved — it is a
+   * suggestion in fields that stay editable.
+   */
+  const lookUp = async (taxNumber: string, quiet = false) => {
+    asked.current = taxNumber;
+    setLooking(true);
+    try {
+      const found = await resources.lookup.company(taxNumber);
+      setForm((f) => ({
+        ...f,
+        name: found.name,
+        street: found.street,
+        postalCode: found.postalCode,
+        city: found.city,
+      }));
+      setErrors({});
+      toast(found.source === 'ajpes' ? 'Podatki iz AJPES' : 'Podatki iz registra DDV');
+    } catch (err) {
+      // An automatic lookup that finds nothing says nothing: the user is
+      // typing, not asking. Pressing the button is asking.
+      if (quiet) return;
+      toast(
+        err instanceof ApiError
+          ? err.message
+          : 'Registra ni bilo mogoče doseči — vnesite podatke ročno',
+      );
+    } finally {
+      setLooking(false);
+    }
+  };
 
-  const save = () => {
+  const setTaxNumber = (value: string) => {
+    const digits = digitsOnly(value, TAX_NUMBER_LENGTH);
+    set('taxNumber', digits);
+
+    // A complete, valid number on an empty form is a request to fill it in.
+    const complete = taxNumberSchema.safeParse(digits).success;
+    if (complete && !form.name.trim() && asked.current !== digits) {
+      void lookUp(digits, true);
+    }
+  };
+
+  const save = async () => {
     const parsed = clientSchema.safeParse({ ...form, rate: parseFloat(form.rate) });
     if (!parsed.success) {
       setErrors(fieldErrors(parsed.error));
@@ -58,17 +111,22 @@ export function ClientSheet({
 
     // Comes back trimmed, with the tax number stripped of any SI prefix.
     const payload = parsed.data;
-    update((d) => {
+    setSaving(true);
+    try {
       if (editing) {
-        const c = d.clients.find((x) => x.id === editing.id);
-        if (c) Object.assign(c, payload);
+        await updateClient(editing.id, payload);
       } else {
-        d.clients.push({ id: created, ...payload });
+        // The id is the server's to assign, so the caller is told it after.
+        const client = await createClient(payload);
+        onCreated?.(client.id);
       }
-    });
-    if (!editing) onCreated?.(created);
-    toast('Stranka shranjena');
-    onClose();
+      toast('Stranka shranjena');
+      onClose();
+    } catch (err) {
+      toast(failureMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const cls = (key: keyof typeof form) =>
@@ -80,11 +138,48 @@ export function ClientSheet({
       title={editing ? 'Uredi stranko' : 'Nova stranka'}
       onClose={onClose}
       footer={
-        <button className={`${btn.primary} ${btnBlock}`} onClick={save}>
+        <button className={`${btn.primary} ${btnBlock}`} onClick={() => void save()}
+          disabled={saving}>
           {editing ? 'Shrani spremembe' : 'Dodaj stranko'}
         </button>
       }
     >
+      <Field
+        label="Davčna številka"
+        htmlFor="clientTax"
+        error={errors.taxNumber}
+        hint={
+          looking
+            ? 'Iščem v registru …'
+            : 'Vnesite davčno številko in podatki se izpolnijo sami.'
+        }
+      >
+        <div className="relative">
+          <input
+            id="clientTax"
+            className={cls('taxNumber') + ' pr-11'}
+            type="text"
+            inputMode="numeric"
+            maxLength={TAX_NUMBER_LENGTH}
+            placeholder="29825962"
+            autoFocus={!editing}
+            value={form.taxNumber}
+            aria-invalid={invalid('taxNumber')}
+            onChange={(e) => setTaxNumber(e.target.value)}
+          />
+          <button
+            type="button"
+            className="absolute inset-y-0 right-0 flex w-11 cursor-pointer items-center justify-center text-muted-fg hover:text-fg disabled:opacity-40"
+            onClick={() => void lookUp(form.taxNumber)}
+            disabled={looking || !taxNumberSchema.safeParse(form.taxNumber).success}
+            aria-label="Poišči v registru"
+            title="Poišči v registru"
+          >
+            <SearchIcon className="size-4" />
+          </button>
+        </div>
+      </Field>
+
       <Field label="Naziv podjetja" htmlFor="clientName" error={errors.name}>
         <input
           id="clientName"
@@ -145,25 +240,7 @@ export function ClientSheet({
 
       <div className={cardLabel}>Obračun</div>
 
-      <div className="mb-4 grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
-        <Field
-          label="Davčna številka"
-          htmlFor="clientTax"
-          error={errors.taxNumber}
-          hint={`${form.taxNumber.length}/${TAX_NUMBER_LENGTH} mest`}
-        >
-          <input
-            id="clientTax"
-            className={cls('taxNumber')}
-            type="text"
-            inputMode="numeric"
-            maxLength={TAX_NUMBER_LENGTH}
-            placeholder="29825962"
-            value={form.taxNumber}
-            aria-invalid={invalid('taxNumber')}
-            onChange={(e) => set('taxNumber', digitsOnly(e.target.value, TAX_NUMBER_LENGTH))}
-          />
-        </Field>
+      <div className="mb-4">
         <Field label="Urna postavka (€)" htmlFor="clientRate" error={errors.rate}>
           <input
             id="clientRate"
