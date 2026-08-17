@@ -17,6 +17,9 @@ export type SheetState =
   | { kind: 'viewInvoice'; id: string }
   | { kind: 'editInvoice'; id: string }
   | { kind: 'timesheet'; id: string }
-  | { kind: 'profile' };
+  | { kind: 'profile' }
+  // The tax module's three inputs: a filing, a remittance, and the odločba.
+  | { kind: 'contribution'; year: number }
+  | { kind: 'taxPayment'; year: number };
 
 export type OpenSheet = (sheet: SheetState) => void;

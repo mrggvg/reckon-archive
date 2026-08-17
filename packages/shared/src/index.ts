@@ -17,7 +17,38 @@ export {
 } from './profile.js';
 export type { ProfileInput } from './profile.js';
 export { invoiceReadiness } from './readiness.js';
-export { tidyRegistryName, tidyPlaceName, parseRegistryAddress } from './registry.js';
+export {
+  taxYearConfig,
+  isProjectedYear,
+  KNOWN_TAX_YEARS,
+  workingHoursInMonth,
+  contributionRelief,
+  healthFixedCents,
+  baseForMonth,
+  contributionsFor,
+  monthlyContributions,
+  nextReliefChange,
+  incomeTax,
+  incomeTaxOnAdditional,
+  revenueThresholds,
+  CONTRIBUTION_ACCOUNTS,
+  suggestedContributionPayments,
+} from './tax.js';
+export type {
+  NormiranecKind,
+  RevenueBand,
+  TaxYearConfig,
+  ContributionBreakdown,
+  IncomeTaxResult,
+  ContributionGroup,
+} from './tax.js';
+export {
+  tidyRegistryName,
+  tidyPlaceName,
+  parseRegistryAddress,
+  unpadHouseNumber,
+  splitPostalPlace,
+} from './registry.js';
 export type { RegistryCompany } from './registry.js';
 export type { MissingField } from './readiness.js';
 export { toCents, fromCents, minutesToHours, lineTotalCents } from './money.js';
@@ -32,14 +63,18 @@ export {
   UUID_PATTERN,
   sessionInputSchema,
   invoiceGenerateSchema,
+  invoiceManualSchema,
   invoiceImportSchema,
   invoiceEditSchema,
   invoicePaymentSchema,
+  taxProfileSchema,
 } from './records.js';
 export type {
   SessionInput,
   InvoiceGenerateInput,
+  InvoiceManualInput,
   InvoiceImportInput,
   InvoiceEditInput,
   InvoicePaymentInput,
+  TaxProfileInput,
 } from './records.js';

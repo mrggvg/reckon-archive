@@ -8,6 +8,7 @@ import {
   type InvoiceEditInput,
   type InvoiceGenerateInput,
   type InvoiceImportInput,
+  type InvoiceManualInput,
 } from '@reckon/shared';
 import { withTransaction } from '../../db/tx.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../lib/AppError.js';
@@ -107,6 +108,49 @@ export const invoicesService = {
     });
   },
 
+  /**
+   * An invoice with no hours behind it: a fixed fee, a call-out, a retainer.
+   *
+   * Numbered by the app like any other invoice it issues — the only difference
+   * from a generated one is that the amount and the period are stated rather
+   * than computed, so nothing is locked and nothing is marked billed.
+   */
+  async manual(userId: string, input: InvoiceManualInput) {
+    return withTransaction(async (tx) => {
+      const client = await clientsRepo.findById(userId, input.clientId);
+      if (!client) throw new NotFoundError('Stranka ni najdena');
+
+      const declared = await profileRepo.declaredNextNumber(tx, userId);
+      const row = await insertWithFreeNumber(tx, userId, declared, input.issueDate, {
+        clientId: client.id,
+        number: '',
+        issueDate: input.issueDate,
+        dueDate: input.dueDate,
+        description: input.description || 'Storitve',
+        periodStart: input.periodStart,
+        periodEnd: input.periodEnd,
+        totalCents: toCents(input.total),
+        totalMinutes: null,
+        rateCents: null,
+        status: 'unpaid',
+        paidOn: null,
+        imported: false,
+        clientName: client.company_name,
+        clientAddress: formatAddress({
+          street: client.street,
+          postalCode: client.postal_code,
+          city: client.city,
+        }),
+        clientTaxNumber: client.tax_number,
+      });
+
+      const issued = parseInvoiceNumber(row.number);
+      if (issued) await profileRepo.advanceNextNumber(tx, userId, issued);
+
+      return toInvoiceDto(row, []);
+    });
+  },
+
   /** An invoice issued before the app existed: the caller states its number. */
   async import(userId: string, input: InvoiceImportInput) {
     const client = await clientsRepo.findById(userId, input.clientId);
@@ -179,7 +223,13 @@ export const invoicesService = {
       patch.description = input.description || 'Storitve';
     }
 
-    if (!existing.imported) {
+    // What may be edited depends on whether hours stand behind the figures,
+    // not on where the invoice came from: an invoice generated from sessions
+    // must keep agreeing with them, while one with no hours has nothing to
+    // contradict.
+    const linkedSessions = (await sessionsRepo.idsByInvoice(userId)).get(id) ?? [];
+
+    if (linkedSessions.length > 0) {
       const refused = ['clientId', 'periodStart', 'periodEnd', 'total'] as const;
       if (refused.some((k) => input[k] !== undefined)) {
         throw new ConflictError(

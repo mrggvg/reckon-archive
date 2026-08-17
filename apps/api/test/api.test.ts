@@ -447,6 +447,68 @@ describe('invoicing', () => {
     assert.equal(new Set(numbers).size, 5, `numbers were ${numbers.join(', ')}`);
   });
 
+  it('issues an invoice with no hours behind it', async () => {
+    const c = await signUp('manual@example.com');
+    await c.put('/profile', PROFILE);
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+
+    const res = await c.post('/invoices/manual', {
+      clientId: client.id,
+      issueDate: '2026-05-31',
+      dueDate: '2026-06-14',
+      description: 'Pripravljenost na klic, maj',
+      periodStart: '2026-05-01',
+      periodEnd: '2026-05-31',
+      total: 450,
+    });
+    assert.equal(res.status, 201);
+    const invoice = res.body as Record<string, unknown>;
+
+    assert.equal(invoice.number, '001/2026', 'numbered by the app like any other');
+    assert.equal(invoice.total, 450);
+    assert.equal(invoice.totalHours, null, 'no hours stand behind it');
+    assert.equal(invoice.rate, null);
+    assert.equal(invoice.imported, false, 'this app issued it');
+    assert.deepEqual(invoice.sessionIds, []);
+    assert.equal(invoice.periodStart, '2026-05-01');
+    assert.equal(invoice.periodEnd, '2026-05-31');
+    assert.equal(invoice.clientName, CLIENT.name);
+
+    // Nothing was billed, so nothing got locked.
+    assert.deepEqual((await c.get('/sessions')).body, []);
+
+    // And with no hours to contradict, its figures stay editable.
+    const edited = await c.patch(`/invoices/${invoice.id as string}`, {
+      total: 500,
+      periodEnd: '2026-06-01',
+    });
+    assert.equal(edited.status, 200);
+    assert.equal((edited.body as { total: number }).total, 500);
+  });
+
+  it('refuses a period that ends before it starts', async () => {
+    const c = await signUp('badperiod@example.com');
+    await c.put('/profile', PROFILE);
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+    const res = await c.post('/invoices/manual', {
+      clientId: client.id,
+      issueDate: '2026-05-31',
+      dueDate: '2026-06-14',
+      description: '',
+      periodStart: '2026-05-31',
+      periodEnd: '2026-05-01',
+      total: 100,
+    });
+    assert.equal(res.status, 422);
+    assert.ok((res.body?.fields as { periodEnd: string }).periodEnd);
+
+    const free = await c.post('/invoices/manual', {
+      clientId: client.id, issueDate: '2026-05-31', dueDate: '2026-06-14',
+      description: '', periodStart: '2026-05-01', periodEnd: '2026-05-31', total: 0,
+    });
+    assert.equal(free.status, 422, 'an invoice for nothing is not an invoice');
+  });
+
   it('refuses a duplicate number on import', async () => {
     const c = await signUp('import@example.com');
     await c.put('/profile', PROFILE);
@@ -534,6 +596,34 @@ describe('invoicing', () => {
     const ok = await c.patch(`/invoices/${invoice.id}`, { description: 'Popravljeno' });
     assert.equal(ok.status, 200);
     assert.equal((ok.body as { description: string }).description, 'Popravljeno');
+  });
+
+  it('lets a payment date be corrected without disturbing the rest', async () => {
+    const c = await signUp('paiddate@example.com');
+    await c.put('/profile', PROFILE);
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+    const invoice = (
+      await c.post('/invoices/import', {
+        number: '011/2026', clientId: client.id, issueDate: '2026-03-01',
+        dueDate: '2026-03-15', description: 'Storitve', periodStart: '2026-02-01',
+        periodEnd: '2026-02-28', total: 1000, status: 'paid', paidDate: '2026-03-20',
+      })
+    ).body as { id: string };
+
+    // Logged as paid today by mistake; the money actually arrived on the 12th.
+    const fixed = await c.patch(`/invoices/${invoice.id}/payment`, {
+      paid: true, paidDate: '2026-03-12',
+    });
+    assert.equal(fixed.status, 200);
+    assert.equal((fixed.body as { paidDate: string }).paidDate, '2026-03-12');
+    assert.equal((fixed.body as { status: string }).status, 'paid', 'still paid');
+    assert.equal((fixed.body as { total: number }).total, 1000, 'and untouched otherwise');
+
+    // Which is the whole reason it matters: revenue follows that date.
+    const t = (await c.get('/tax/trajectory?year=2026')).body as {
+      paidSeries: { date: string }[];
+    };
+    assert.equal(t.paidSeries[0]?.date, '2026-03-12');
   });
 
   it('records payment and takes it back', async () => {
@@ -717,6 +807,88 @@ describe('registry lookup', () => {
     });
   });
 
+  it('maps an AJPES row the way the register actually sends it', async () => {
+    // Verbatim from the restPrsInfo documentation's own example response.
+    const { mapAjpesRow } = await import('../src/modules/lookup/lookup.service.js');
+
+    assert.deepEqual(
+      mapAjpesRow(
+        {
+          popolno_ime: 'Mia Erbus, računalniško programiranje, s.p.',
+          kratko_ime: 'Mia Erbus s.p.',
+          maticna: '9089357000',
+          ulica: 'Placar 042 A',
+          posta: '2250 Ptuj',
+        },
+        '12345670',
+      ),
+      {
+        // The registered name, not the short one: that is what goes on an invoice.
+        name: 'Mia Erbus, računalniško programiranje, s.p.',
+        street: 'Placar 42 A',
+        postalCode: '2250',
+        city: 'Ptuj',
+        taxNumber: '12345670',
+        regNumber: '9089357000',
+        source: 'ajpes',
+      },
+    );
+
+    const fructal = mapAjpesRow(
+      { popolno_ime: 'FRUCTAL Živilska industrija d.o.o.', maticna: '5048664000',
+        ulica: 'Tovarniška cesta 007', posta: '5270 Ajdovščina' },
+      '12345670',
+    );
+    assert.equal(fructal.street, 'Tovarniška cesta 7');
+    assert.equal(fructal.city, 'Ajdovščina');
+  });
+
+  it('reads a bizi.si result row', async () => {
+    const { parseBiziRow } = await import('../src/modules/lookup/lookup.service.js');
+
+    // Trimmed from a real results page: the cells in the order the site emits
+    // them, with the markup that identifies each one.
+    const page = `
+      <div id="x_trRepRow_7523459000" Class="row b-table-row">
+        <div Class="col b-table-cell b-check"><input type="checkbox" /></div>
+        <div Class="col b-table-cell b-table-cell-title"><a class="i-shield"></a><a class="b-link-company" href="/AMAR-USTAVDIC-S-P/"><span Class="b-company-title">Amar Ustavdić, s.p.</span></a></div>
+        <div Class="col b-table-cell "><a href="javascript:openMapTis(45.54264, 13.70775, &#39;Amar Ustavdić, s.p.&#39;, &#39;KOPER&#39;, 0.5);">Izletniška pot   052</a></div>
+        <div Class="col b-table-cell  d-none d-sm-block">6000 Koper - Capodistria</div>
+        <div Class="col b-table-cell  d-none d-md-block">7523459000</div>
+        <div Class="col b-table-cell  d-none d-lg-block">82426490</div>
+        <div Class="col b-table-cell  d-none d-xl-block">Zaščita in reševanje pri požarih in nesrečah</div>
+      </div>`;
+
+    assert.deepEqual(parseBiziRow(page, '82426490'), {
+      name: 'Amar Ustavdić, s.p.',
+      street: 'Izletniška pot 52',
+      postalCode: '6000',
+      city: 'Koper - Capodistria',
+      taxNumber: '82426490',
+      regNumber: '7523459000',
+      source: 'bizi',
+    });
+
+    // A page about somebody else is not an answer about this number.
+    assert.equal(parseBiziRow(page, '29825962'), null);
+    // Markup that changed past recognition reads as "not found", not a crash.
+    assert.equal(parseBiziRow('<html><body>nothing here</body></html>', '82426490'), null);
+  });
+
+  it('explains an absence by what was actually asked', async () => {
+    // With the business-register fallback on, absence means absent from it;
+    // with only VIES available it means "not registered for VAT", which is a
+    // different and much more common thing.
+    process.env.BIZI_FALLBACK = 'off';
+    const { lookupService } = await import('../src/modules/lookup/lookup.service.js');
+    void lookupService;
+    process.env.BIZI_FALLBACK = 'on';
+
+    const c = await signUp('notvat@example.com');
+    const res = await c.get('/lookup/company?taxNumber=11111111');
+    assert.equal(res.status, 422, 'a number failing its check digit never leaves here');
+  });
+
   it('checks the number before asking anyone about it', async () => {
     const c = await signUp('lookup@example.com');
     const bad = await c.get('/lookup/company?taxNumber=12345678');
@@ -775,6 +947,714 @@ describe('rate limiting', () => {
     await new Promise<void>((resolve) => srv.close(() => resolve()));
 
     assert.deepEqual(codes, [204, 204, 204, 429, 429]);
+  });
+});
+
+describe('tax engines', () => {
+  it('reproduces the real PODO-OPSVZ filings to the cent', async () => {
+    const { monthlyContributions } = await import('@reckon/shared');
+
+    // June 2026: registered on the 3rd, so the base is prorated 160/176 hours.
+    const june = monthlyContributions({
+      year: 2026, month: 6, startIso: '2026-06-03', fullBaseCents: 152162,
+    });
+    assert.equal(june.baseCents, 138329, 'prorated base');
+    assert.equal(june.relief, 0.5, '50% relief in the first year');
+    assert.equal(june.piz, 16841);
+    assert.equal(june.zzDo, 25308);
+    assert.equal(june.stv, 276);
+    assert.equal(june.zap, 277);
+    assert.equal(june.total, 42702, 'the filing says 427,02');
+
+    // July 2026: the first full month.
+    const july = monthlyContributions({
+      year: 2026, month: 7, startIso: '2026-06-03', fullBaseCents: 152162,
+    });
+    assert.equal(july.baseCents, 152162);
+    assert.equal(july.piz, 18526);
+    assert.equal(july.zzDo, 27445);
+    assert.equal(july.stv, 304);
+    assert.equal(july.zap, 304);
+    assert.equal(july.total, 46579, 'the filing says 465,79');
+  });
+
+  it('steps the relief down at twelve months and off at twenty-four', async () => {
+    const { contributionRelief, taxYearConfig, monthlyContributions } = await import(
+      '@reckon/shared'
+    );
+    const { config } = taxYearConfig(2026);
+
+    assert.equal(contributionRelief('2026-06-03', 2026, 6, config), 0.5, 'month 0');
+    assert.equal(contributionRelief('2026-06-03', 2027, 5, config), 0.5, 'month 11');
+    assert.equal(contributionRelief('2026-06-03', 2027, 6, config), 0.3, 'month 12');
+    assert.equal(contributionRelief('2026-06-03', 2028, 5, config), 0.3, 'month 23');
+    assert.equal(contributionRelief('2026-06-03', 2028, 6, config), 0, 'month 24');
+
+    // The step is a real jump in what is owed, which is the point of showing it.
+    const first = monthlyContributions({
+      year: 2027, month: 5, startIso: '2026-06-03', fullBaseCents: 152162,
+    });
+    const second = monthlyContributions({
+      year: 2027, month: 6, startIso: '2026-06-03', fullBaseCents: 152162,
+    });
+    assert.ok(second.total > first.total, 'contributions rise when relief drops');
+    assert.equal(second.piz - first.piz, 7410, '20 points of a 37.052 PIZ charge');
+  });
+
+  it('counts weekdays the way the filing did, holidays included', async () => {
+    const { workingHoursInMonth } = await import('@reckon/shared');
+    // 25 June 2026 is a state holiday on a Thursday; the filing still counted
+    // it, so 3–30 June is 20 weekdays, not 19.
+    assert.equal(workingHoursInMonth(2026, 6), 176);
+    assert.equal(workingHoursInMonth(2026, 6, 3), 160);
+  });
+
+  it('taxes revenue in bands, and splits a payment that straddles one', async () => {
+    const { incomeTax, incomeTaxOnAdditional } = await import('@reckon/shared');
+
+    // 4% effective up to 60.000: 80% recognised as expense, 20% rate on the rest.
+    assert.equal(incomeTax(3_000_000, 'full', 2026).taxCents, 120_000);
+    assert.equal(incomeTax(6_000_000, 'full', 2026).taxCents, 240_000);
+    // Above it nothing is recognised, so each euro is base, taxed at 20%.
+    assert.equal(incomeTax(9_000_000, 'full', 2026).taxCents, 840_000);
+    // At 120.000 of revenue the base is 72.000 — where 35% begins.
+    const at120 = incomeTax(12_000_000, 'full', 2026);
+    assert.equal(at120.baseCents, 7_200_000);
+    assert.equal(at120.taxCents, 1_440_000);
+    assert.equal(at120.marginalRate, 0.35);
+    assert.equal(incomeTax(13_000_000, 'full', 2026).taxCents, 1_790_000);
+
+    // A single payment crossing 60.000 is taxed on both sides of the line.
+    assert.equal(
+      incomeTaxOnAdditional(5_500_000, 1_000_000, 'full', 2026),
+      120_000,
+      '5.000 at 4% plus 5.000 at 20%',
+    );
+    // The rate on new money follows the cumulative position, not the amount.
+    assert.equal(incomeTaxOnAdditional(0, 1_000_000, 'full', 2026), 40_000);
+  });
+
+  it('matches the published worked example for a popoldanski s.p.', async () => {
+    const { incomeTax } = await import('@reckon/shared');
+    // 12.500 at 4% + 17.500 at 12% + 20.000 at 20% + 10.000 at 35% = 10.100.
+    assert.equal(incomeTax(6_000_000, 'part', 2026).taxCents, 1_010_000);
+  });
+});
+
+describe('tax module', () => {
+  const taxProfile = {
+    businessStartDate: '2026-06-03',
+    contributionBase: 1521.62,
+    contributionReliefOverride: null,
+    normiranecKind: 'full' as const,
+    declaredMonthlyEstimate: null,
+    officialInstallment: 120,
+    officialInstallmentFrequency: 'monthly' as const,
+    dohodninaIban: 'SI56011008881000030',
+    dohodninaReference: '',
+    weeklyHours: 40,
+  };
+
+  async function withRevenue(email: string) {
+    const c = await signUp(email);
+    await c.put('/profile', PROFILE);
+    await c.put('/profile/tax', taxProfile);
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+
+    // Two invoices paid this year, one still outstanding.
+    const invoice = async (number: string, total: number, paidOn: string | null) =>
+      (
+        await c.post('/invoices/import', {
+          number, clientId: client.id, issueDate: '2026-07-01', dueDate: '2126-07-15',
+          description: 'Storitve', periodStart: '2026-06-01', periodEnd: '2026-06-30',
+          total, status: paidOn ? 'paid' : 'unpaid', paidDate: paidOn,
+        })
+      ).body as { id: string };
+
+    await invoice('001/2026', 4000, '2026-07-10');
+    await invoice('002/2026', 2500, '2026-08-05');
+    await invoice('003/2026', 1000, null);
+    return c;
+  }
+
+  it('invents nothing before the business details exist', async () => {
+    // A brand-new account: no start date, no base confirmed, no invoices.
+    const c = await signUp('empty-tax@example.com');
+    await c.put('/profile', PROFILE);
+
+    const s = (await c.get('/tax/summary?year=2026')).body as Record<
+      string,
+      Record<string, unknown>
+    > & { needs: string[] };
+
+    assert.deepEqual(s.needs, ['businessStartDate'], 'and it says what is missing');
+    assert.equal(s.contributions!.configured, false);
+    assert.equal(s.contributions!.monthlyAmount, null, 'no figure, not a default one');
+    assert.equal(s.contributions!.breakdown, null);
+    assert.equal(s.contributions!.dueThisYear, 0, 'no year-long debt conjured up');
+    assert.equal(s.thisMonth!.contributions, null);
+
+    // The schedule is empty rather than twelve invented months.
+    assert.deepEqual((await c.get('/tax/contributions?year=2026')).body, []);
+
+    // Income tax needs none of that — it follows the invoices, and there are none.
+    assert.equal(s.dohodnina!.ytdRevenue, 0);
+    assert.equal(s.dohodnina!.owedToDate, 0);
+  });
+
+  it('computes income tax from paid invoices alone, with no s.p. details set', async () => {
+    const c = await signUp('paidonly@example.com');
+    await c.put('/profile', PROFILE);
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+    await c.post('/invoices/import', {
+      number: '001/2026', clientId: client.id, issueDate: '2026-07-01',
+      dueDate: '2126-07-15', description: 'Storitve', periodStart: '2026-06-01',
+      periodEnd: '2026-06-30', total: 5000, status: 'paid', paidDate: '2026-07-10',
+    });
+    // An unpaid one must not count: revenue is what arrived.
+    await c.post('/invoices/import', {
+      number: '002/2026', clientId: client.id, issueDate: '2026-07-01',
+      dueDate: '2126-07-15', description: 'Storitve', periodStart: '2026-06-01',
+      periodEnd: '2026-06-30', total: 9999, status: 'unpaid', paidDate: null,
+    });
+
+    const s = (await c.get('/tax/summary?year=2026')).body as Record<
+      string,
+      Record<string, unknown>
+    >;
+    assert.equal(s.dohodnina!.ytdRevenue, 5000, 'only what was actually paid');
+    assert.equal(s.dohodnina!.owedToDate, 200, '4% of 5.000');
+    assert.equal(s.contributions!.configured, false, 'still nothing to say there');
+  });
+
+  it('answers what is owed right now, keeping the two obligations apart', async () => {
+    const c = await withRevenue('tax@example.com');
+    const res = await c.get('/tax/summary?year=2026');
+    assert.equal(res.status, 200);
+    const s = res.body as Record<string, Record<string, unknown>>;
+
+    // Revenue counts when the money arrived: 4.000 + 2.500, not the unpaid 1.000.
+    assert.equal(s.dohodnina!.ytdRevenue, 6500);
+    assert.equal(s.dohodnina!.owedToDate, 260, '4% of 6.500');
+    assert.equal(s.dohodnina!.recommendedNow, 260, 'nothing paid yet');
+    assert.equal(s.dohodnina!.marginalRate, 0.04);
+    assert.equal(s.dohodnina!.reference, 'SI19 82426490-40002', 'offered, not invented');
+
+    // Contributions know nothing about revenue.
+    assert.equal(s.contributions!.relief, 0.5);
+    assert.equal(s.contributions!.estimated, true);
+    assert.ok((s.contributions!.dueThisYear as number) > 0);
+
+    assert.deepEqual(s.officialInstallment, { amount: 120, frequency: 'monthly' });
+    assert.equal((s.partialYear as { monthsCovered: number }).monthsCovered, 7);
+  });
+
+  it('owes the month that has ended, not the one still running', async () => {
+    const c = await withRevenue('duemonth@example.com');
+    const now = new Date();
+
+    // The current year: what is owed is last month, and the running month is
+    // not on the list at all.
+    const current = (await c.get(`/tax/summary?year=${now.getFullYear()}`)).body as {
+      contributions: { dueMonth: number | null };
+      thisMonth: { month: number };
+    };
+    assert.equal(
+      current.contributions.dueMonth,
+      now.getMonth(),
+      'the previous calendar month',
+    );
+    assert.notEqual(current.contributions.dueMonth, now.getMonth() + 1);
+
+    // A year gone by owes all of itself — provided the business existed then.
+    // This fixture opened in June 2026, so last year owes nothing at all.
+    const past = (await c.get(`/tax/summary?year=${now.getFullYear() - 1}`)).body as {
+      contributions: { dueMonth: number | null; beforeBusiness: boolean };
+    };
+    assert.equal(past.contributions.beforeBusiness, true);
+    assert.equal(past.contributions.dueMonth, null);
+
+    // An older business does owe the whole of a year gone by.
+    const older = await signUp('older@example.com');
+    await older.put('/profile', PROFILE);
+    await older.put('/profile/tax', { ...taxProfile, businessStartDate: '2020-01-15' });
+    const theirs = (await older.get(`/tax/summary?year=${now.getFullYear() - 1}`)).body as {
+      contributions: { dueMonth: number | null };
+    };
+    assert.equal(theirs.contributions.dueMonth, 12);
+
+    // A year not yet begun owes nothing.
+    const future = (await c.get(`/tax/summary?year=${now.getFullYear() + 1}`)).body as {
+      contributions: { dueMonth: number | null; monthlyAmount: number | null };
+    };
+    assert.equal(future.contributions.dueMonth, null);
+    assert.equal(future.contributions.monthlyAmount, null);
+  });
+
+  it('owes nothing for a year before the s.p. existed', async () => {
+    const c = await withRevenue('before@example.com');
+    // The business starts 03.06.2026; 2025 predates it entirely.
+    const s = (await c.get('/tax/summary?year=2025')).body as Record<
+      string,
+      Record<string, unknown>
+    >;
+
+    assert.equal(s.contributions!.beforeBusiness, true);
+    assert.equal(s.contributions!.dueMonth, null, 'no month of it was owed');
+    assert.equal(s.contributions!.monthlyAmount, null, 'and no amount, not even a full one');
+    assert.equal(s.contributions!.dueThisYear, 0);
+    assert.equal(s.thisMonth!.contributions, null);
+    assert.equal(s.thisMonth!.total, 0);
+    assert.deepEqual((await c.get('/tax/contributions?year=2025')).body, []);
+
+    // The year it opened owes only from the month it opened.
+    const opened = (await c.get('/tax/summary?year=2026')).body as Record<
+      string,
+      Record<string, unknown>
+    >;
+    assert.equal(opened.contributions!.beforeBusiness, false);
+  });
+
+  it('refuses to estimate contributions for a popoldanski s.p.', async () => {
+    // Their contributions are a flat pavšal of a little over 100 EUR, not a
+    // share of the insurance base — the full-time engine would say ~650.
+    const c = await signUp('part@example.com');
+    await c.put('/profile', PROFILE);
+    await c.put('/profile/tax', { ...taxProfile, normiranecKind: 'part' });
+
+    const s = (await c.get('/tax/summary?year=2026')).body as Record<
+      string,
+      Record<string, unknown>
+    >;
+    assert.equal(s.contributions!.estimateUnavailable, true);
+    assert.equal(s.contributions!.monthlyAmount, null, 'no figure rather than a wrong one');
+    assert.deepEqual((await c.get('/tax/contributions?year=2026')).body, []);
+
+    // The tax side still works — those bands are modelled for both kinds.
+    assert.equal(s.dohodnina!.marginalRate, 0.04);
+
+    // And a filing entered by hand is honoured exactly as entered.
+    await c.post('/tax/contributions', {
+      year: 2026, month: 7, base: 0, piz: 49.15, zzDo: 60.96, stv: 0, zap: 0,
+    });
+    const filed = (await c.get('/tax/contributions?year=2026')).body as {
+      month: number; total: number; estimated: boolean;
+    }[];
+    assert.equal(filed.length, 1);
+    assert.equal(filed[0]?.total, 110.11);
+    assert.equal(filed[0]?.estimated, false);
+  });
+
+  it('stops asking for a month that has been paid', async () => {
+    const c = await signUp('settled-head@example.com');
+    await c.put('/profile', PROFILE);
+    await c.put('/profile/tax', { ...taxProfile, businessStartDate: '2020-01-15' });
+
+    // A year gone by, so the month in question is December.
+    const year = new Date().getFullYear() - 1;
+    const before = (await c.get(`/tax/summary?year=${year}`)).body as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const monthly = before.contributions!.monthlyAmount as number;
+    assert.ok(monthly > 0);
+    assert.equal(before.thisMonth!.contributions, monthly, 'the whole month is owed');
+    assert.equal(before.thisMonth!.contributionsSettled, false);
+
+    await c.post('/tax/payments', {
+      paidOn: `${year}-12-20`, amount: monthly, kind: 'contributions',
+      note: '', periodYear: year, periodMonth: 12, groupKey: null,
+    });
+
+    const after = (await c.get(`/tax/summary?year=${year}`)).body as Record<
+      string,
+      Record<string, unknown>
+    >;
+    assert.equal(after.thisMonth!.contributions, 0, 'nothing left to pay for it');
+    assert.equal(after.thisMonth!.contributionsSettled, true);
+    assert.equal(after.contributions!.dueSettled, true);
+    // The headline total is now only the tax side.
+    assert.equal(after.thisMonth!.total, after.thisMonth!.recommendedDohodnina);
+    // And the month itself is off the to-pay list, as it already was.
+    const schedule = (await c.get(`/tax/contributions?year=${year}`)).body as {
+      month: number; settled: { groups: Record<string, boolean> };
+    }[];
+    assert.equal(schedule.find((m) => m.month === 12)?.settled.groups.piz, true);
+  });
+
+  it('partly paying a month leaves only the remainder owing', async () => {
+    const c = await signUp('partial-head@example.com');
+    await c.put('/profile', PROFILE);
+    await c.put('/profile/tax', { ...taxProfile, businessStartDate: '2020-01-15' });
+    const year = new Date().getFullYear() - 1;
+
+    const monthly = ((await c.get(`/tax/summary?year=${year}`)).body as {
+      contributions: { monthlyAmount: number };
+    }).contributions.monthlyAmount;
+
+    // Only the PIZ part.
+    await c.post('/tax/payments', {
+      paidOn: `${year}-12-20`, amount: 185.26, kind: 'contributions',
+      note: '', periodYear: year, periodMonth: 12, groupKey: 'piz',
+    });
+
+    const s = (await c.get(`/tax/summary?year=${year}`)).body as Record<
+      string,
+      Record<string, unknown>
+    >;
+    assert.equal(s.thisMonth!.contributions, Math.round((monthly - 185.26) * 100) / 100);
+    assert.equal(s.thisMonth!.contributionsSettled, false, 'not done until it is');
+  });
+
+  it('warns that paying tax before invoices land means paying again', async () => {
+    const c = await withRevenue('accrue@example.com');
+    const s = (await c.get('/tax/summary?year=2026')).body as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const outstanding = s.dohodnina!.outstanding as {
+      count: number;
+      amount: number;
+      taxIfPaid: number;
+    };
+
+    // One invoice of 1.000 is still unpaid, and it will add 4% when it lands.
+    assert.equal(outstanding.count, 1);
+    assert.equal(outstanding.amount, 1000);
+    assert.equal(outstanding.taxIfPaid, 40);
+
+    // Which is exactly the accumulation being warned about: settle the
+    // recommendation now and the next payment reopens it.
+    assert.equal(s.dohodnina!.recommendedNow, 260);
+    await c.post('/tax/payments', {
+      paidOn: '2026-08-20', amount: 260, kind: 'income_tax', note: '',
+      periodYear: 2026, periodMonth: null, groupKey: null,
+    });
+    const after = (await c.get('/tax/summary?year=2026')).body as Record<
+      string,
+      Record<string, unknown>
+    >;
+    assert.equal(after.dohodnina!.recommendedNow, 0, 'square, for now');
+    assert.equal(
+      (after.dohodnina!.outstanding as { taxIfPaid: number }).taxIfPaid,
+      40,
+      'and 40 more waiting to be owed the moment that invoice is paid',
+    );
+  });
+
+  it('subtracts what has already been paid from the recommendation', async () => {
+    const c = await withRevenue('paced@example.com');
+    await c.post('/tax/payments', {
+      paidOn: '2026-08-20', amount: 100, kind: 'income_tax', note: 'akontacija',
+    });
+
+    const s = (await c.get('/tax/summary?year=2026')).body as Record<
+      string,
+      Record<string, unknown>
+    >;
+    assert.equal(s.dohodnina!.paidToDate, 100);
+    assert.equal(s.dohodnina!.recommendedNow, 160, '260 owed less 100 paid');
+  });
+
+  it('plots money received and where it lands if everyone pays', async () => {
+    const c = await withRevenue('traj@example.com');
+    const t = (await c.get('/tax/trajectory?year=2026')).body as Record<string, unknown>;
+
+    const paid = t.paidSeries as { date: string; cumulativeRevenue: number }[];
+    assert.deepEqual(paid.map((p) => p.cumulativeRevenue), [4000, 6500]);
+    assert.equal(paid[0]?.date, '2026-07-10', 'stepped on the payment date');
+
+    // The optimistic line continues from where the real one stopped.
+    const invoiced = t.invoicedSeries as { cumulativeRevenue: number }[];
+    assert.deepEqual(invoiced.map((p) => p.cumulativeRevenue), [7500]);
+    assert.equal(t.outstanding, 1000, 'the gap is money owed to you');
+
+    const thresholds = t.thresholds as { amount: number; crossedOn: string | null }[];
+    assert.equal(thresholds[0]?.amount, 60000);
+    assert.equal(thresholds[0]?.crossedOn, null, 'nowhere near it yet');
+    // A partial first year starts at registration, not at 1 January.
+    assert.equal(t.yearStart, '2026-06-03');
+  });
+
+  it('records a real filing and prefers it over the estimate', async () => {
+    const c = await withRevenue('filed@example.com');
+
+    const before = (await c.get('/tax/contributions?year=2026')).body as {
+      month: number; estimated: boolean; total: number;
+    }[];
+    assert.equal(before[0]?.month, 6, 'the year starts when the business did');
+    assert.equal(before[0]?.estimated, true);
+    assert.equal(before[0]?.total, 427.02, 'the estimate already matches the filing');
+
+    const created = await c.post('/tax/contributions', {
+      year: 2026, month: 6, base: 1383.29,
+      piz: 168.41, zzDo: 253.08, stv: 2.76, zap: 2.77,
+      payment: {
+        piz: { iban: 'SI56011008882000003', reference: 'SI19 82426490-44008' },
+        zzDo: { iban: 'SI56011008883000073', reference: 'SI19 82426490-45004' },
+        stv: { iban: 'SI56011008881000030', reference: 'SI19 82426490-43001' },
+        zap: { iban: 'SI56011008881000030', reference: 'SI19 82426490-42005' },
+      },
+    });
+    assert.equal(created.status, 201);
+
+    const after = (await c.get('/tax/contributions?year=2026')).body as {
+      month: number; estimated: boolean; total: number;
+      payment: { piz: { reference: string } } | null;
+    }[];
+    assert.equal(after[0]?.estimated, false, 'the filing replaced the estimate');
+    assert.equal(after[0]?.total, 427.02);
+    assert.equal(after[0]?.payment?.piz.reference, 'SI19 82426490-44008');
+
+    // Filing the same month again corrects it rather than duplicating it.
+    await c.post('/tax/contributions', {
+      year: 2026, month: 6, base: 1383.29, piz: 168.41, zzDo: 253.08, stv: 2.76, zap: 2.80,
+    });
+    const again = (await c.get('/tax/contributions?year=2026')).body as { total: number }[];
+    assert.equal(again[0]?.total, 427.05);
+    assert.equal(again.filter((m) => m.total === 427.05).length, 1);
+  });
+
+  it('offers last month\'s accounts so they are not retyped', async () => {
+    const c = await withRevenue('refs@example.com');
+    await c.post('/tax/contributions', {
+      year: 2026, month: 6, base: 1383.29, piz: 168.41, zzDo: 253.08, stv: 2.76, zap: 2.77,
+      payment: {
+        piz: { iban: 'SI56011008882000003', reference: 'SI19 82426490-44008' },
+        zzDo: { iban: 'SI56011008883000073', reference: 'SI19 82426490-45004' },
+        stv: { iban: 'SI56011008881000030', reference: 'SI19 82426490-43001' },
+        zap: { iban: 'SI56011008881000030', reference: 'SI19 82426490-42005' },
+      },
+    });
+    const last = (await c.get('/tax/contributions/last-payment-details')).body as {
+      piz: { iban: string; reference: string };
+    };
+    assert.equal(last.piz.iban, 'SI56011008882000003');
+    assert.equal(last.piz.reference, 'SI19 82426490-44008');
+  });
+
+  it('reconciles the year-end assessment against what was paid', async () => {
+    const c = await withRevenue('assess@example.com');
+    await c.post('/tax/payments', {
+      paidOn: '2026-12-20', amount: 200, kind: 'income_tax', note: '',
+    });
+    await c.put('/tax/assessments/2026', {
+      assessed: 260, receivedOn: '2027-03-15', note: 'odločba',
+    });
+
+    const s = (await c.get('/tax/summary?year=2026')).body as Record<string, unknown>;
+    const a = s.assessment as { assessed: number; paid: number; balance: number };
+    assert.equal(a.assessed, 260);
+    assert.equal(a.paid, 200);
+    assert.equal(a.balance, 60, 'still to settle within 30 days of filing');
+  });
+
+  it('keeps one account\'s tax out of another\'s', async () => {
+    const a = await withRevenue('taxa@example.com');
+    const b = await signUp('taxb@example.com');
+    await b.put('/profile', PROFILE);
+
+    const mine = (await a.get('/tax/summary?year=2026')).body as Record<string, Record<string, unknown>>;
+    const theirs = (await b.get('/tax/summary?year=2026')).body as Record<string, Record<string, unknown>>;
+    assert.equal(mine.dohodnina!.ytdRevenue, 6500);
+    assert.equal(theirs.dohodnina!.ytdRevenue, 0);
+
+    const contributions = (await a.get('/tax/contributions?year=2026')).body as unknown[];
+    const id = (await a.post('/tax/contributions', {
+      year: 2026, month: 7, base: 1521.62, piz: 185.26, zzDo: 274.45, stv: 3.04, zap: 3.04,
+    })).body as { id: string };
+    assert.ok(contributions.length > 0);
+    assert.equal((await b.del(`/tax/contributions/${id.id}`)).status, 404);
+  });
+});
+
+describe('paying before FURS says so', () => {
+  it('offers payment codes for an estimated month once the accounts are known', async () => {
+    const c = await signUp('early@example.com');
+    await c.put('/profile', PROFILE);
+    await c.put('/profile/tax', {
+      businessStartDate: '2026-06-03', contributionBase: 1521.62,
+      contributionReliefOverride: null, normiranecKind: 'full',
+      declaredMonthlyEstimate: null, officialInstallment: null,
+      officialInstallmentFrequency: null, dohodninaIban: 'SI56011008881000030',
+      dohodninaReference: '', weeklyHours: 40,
+    });
+
+    // Before the accounts are confirmed there is an amount but nowhere to send
+    // it, and the app says so with a null rather than a guessed reference.
+    const before = (await c.get('/tax/contributions?year=2026')).body as {
+      month: number; total: number; payment: unknown; estimated: boolean;
+    }[];
+    assert.equal(before[0]?.total, 427.02, 'the amount is known regardless');
+    assert.equal(before[0]?.payment, null, 'but not where to pay it');
+
+    // Confirm them once on the profile — the suggested ones, checked by the user.
+    const { suggestedContributionPayments } = await import('@reckon/shared');
+    const suggested = suggestedContributionPayments('82426490');
+    assert.equal(suggested.piz.reference, 'SI19 82426490-44008');
+    assert.equal(suggested.piz.iban, 'SI56011008882000003');
+
+    await c.put('/profile/tax', {
+      businessStartDate: '2026-06-03', contributionBase: 1521.62,
+      contributionReliefOverride: null, normiranecKind: 'full',
+      declaredMonthlyEstimate: null, officialInstallment: null,
+      officialInstallmentFrequency: null, dohodninaIban: 'SI56011008881000030',
+      dohodninaReference: '', weeklyHours: 40,
+      contributionAccounts: suggested,
+    });
+
+    const after = (await c.get('/tax/contributions?year=2026')).body as {
+      month: number; estimated: boolean;
+      payment: { piz: { iban: string; reference: string } } | null;
+    }[];
+    assert.equal(after[0]?.estimated, true, 'still an estimate — FURS has not filed yet');
+    assert.equal(after[0]?.payment?.piz.reference, 'SI19 82426490-44008');
+    assert.equal(after[0]?.payment?.piz.iban, 'SI56011008882000003');
+  });
+
+  it('learns the accounts from the first real filing', async () => {
+    const c = await signUp('learns@example.com');
+    await c.put('/profile', PROFILE);
+    await c.put('/profile/tax', {
+      businessStartDate: '2026-06-03', contributionBase: 1521.62,
+      contributionReliefOverride: null, normiranecKind: 'full',
+      declaredMonthlyEstimate: null, officialInstallment: null,
+      officialInstallmentFrequency: null, dohodninaIban: 'SI56011008881000030',
+      dohodninaReference: '', weeklyHours: 40,
+    });
+
+    await c.post('/tax/contributions', {
+      year: 2026, month: 6, base: 1383.29, piz: 168.41, zzDo: 253.08, stv: 2.76, zap: 2.77,
+      payment: {
+        piz: { iban: 'SI56011008882000003', reference: 'SI19 82426490-44008' },
+        zzDo: { iban: 'SI56011008883000073', reference: 'SI19 82426490-45004' },
+        stv: { iban: 'SI56011008881000030', reference: 'SI19 82426490-43001' },
+        zap: { iban: 'SI56011008881000030', reference: 'SI19 82426490-42005' },
+      },
+    });
+
+    // July was never filed, but now it knows where July is paid.
+    const schedule = (await c.get('/tax/contributions?year=2026')).body as {
+      month: number; estimated: boolean;
+      payment: { zzDo: { reference: string } } | null;
+    }[];
+    const july = schedule.find((m) => m.month === 7);
+    assert.equal(july?.estimated, true);
+    assert.equal(july?.payment?.zzDo.reference, 'SI19 82426490-45004');
+  });
+
+  it('records a payment against the month and group it settles', async () => {
+    const c = await signUp('settle@example.com');
+    await c.put('/profile', PROFILE);
+    await c.put('/profile/tax', {
+      businessStartDate: '2026-06-03', contributionBase: 1521.62,
+      contributionReliefOverride: null, normiranecKind: 'full',
+      declaredMonthlyEstimate: null, officialInstallment: null,
+      officialInstallmentFrequency: null, dohodninaIban: 'SI56011008881000030',
+      dohodninaReference: '', weeklyHours: 40,
+    });
+
+    // Paid the PIZ part of July early, straight after being paid by a client.
+    await c.post('/tax/payments', {
+      paidOn: '2026-08-03', amount: 185.26, kind: 'contributions',
+      note: '', periodYear: 2026, periodMonth: 7, groupKey: 'piz',
+    });
+
+    const july = ((await c.get('/tax/contributions?year=2026')).body as {
+      month: number;
+      settled: { paid: number; groups: Record<string, boolean> };
+    }[]).find((m) => m.month === 7);
+
+    assert.equal(july?.settled.paid, 185.26);
+    assert.equal(july?.settled.groups.piz, true, 'that group is settled');
+    assert.equal(july?.settled.groups.zzDo, false, 'the other three are not');
+
+    // A single lump payment for the month settles all four.
+    await c.post('/tax/payments', {
+      paidOn: '2026-08-04', amount: 280.53, kind: 'contributions',
+      note: 'ostalo', periodYear: 2026, periodMonth: 8, groupKey: null,
+    });
+    const august = ((await c.get('/tax/contributions?year=2026')).body as {
+      month: number; settled: { groups: Record<string, boolean> };
+    }[]).find((m) => m.month === 8);
+    assert.equal(august?.settled.groups.zzDo, true);
+    assert.equal(august?.settled.groups.zap, true);
+
+    // And the payment remembers what it was for.
+    const payments = (await c.get('/tax/payments?year=2026')).body as {
+      periodMonth: number | null; groupKey: string | null;
+    }[];
+    assert.equal(payments.some((p) => p.periodMonth === 7 && p.groupKey === 'piz'), true);
+  });
+});
+
+describe('effective hourly rate', () => {
+  it('says what an hour is worth after everything is paid', async () => {
+    const c = await signUp('rate@example.com');
+    await c.put('/profile', PROFILE);
+    await c.put('/profile/tax', {
+      businessStartDate: '2026-01-01', contributionBase: 1521.62,
+      contributionReliefOverride: null, normiranecKind: 'full',
+      declaredMonthlyEstimate: null, officialInstallment: null,
+      officialInstallmentFrequency: null, dohodninaIban: 'SI56011008881000030',
+      dohodninaReference: '', weeklyHours: 40,
+    });
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+
+    const today = new Date().toISOString().slice(0, 10);
+    const year = today.slice(0, 4);
+    // Ten days of eight hours, and an invoice paid for them.
+    for (let day = 1; day <= 10; day++) {
+      await c.post('/sessions', {
+        clientId: client.id,
+        date: `${year}-${today.slice(5, 7)}-${String(day).padStart(2, '0')}`,
+        start: '09:00', end: '17:00', note: '',
+      });
+    }
+    await c.post('/invoices/import', {
+      number: '010/2026', clientId: client.id, issueDate: today, dueDate: today,
+      description: 'Storitve', periodStart: `${year}-01-01`, periodEnd: today,
+      total: 2400, status: 'paid', paidDate: today,
+    });
+
+    const res = await c.get('/earnings/effective-rate');
+    assert.equal(res.status, 200);
+    const r = res.body as Record<string, unknown>;
+    const ytd = (r.windows as { key: string; gross: number; hours: number; effectiveRate: number; net: number }[])
+      .find((w) => w.key === 'ytd')!;
+
+    assert.equal(ytd.gross, 2400);
+    assert.equal(ytd.hours, 80);
+    assert.equal(ytd.dohodnina, 96, '4% of 2.400');
+
+    // Net is gross less both obligations, and the rate is net over the hours
+    // behind it — arithmetic the caller can check rather than trust.
+    assert.equal(
+      Math.round((ytd.gross - ytd.contributions - ytd.dohodnina) * 100) / 100,
+      ytd.net,
+    );
+    assert.equal(Math.round((ytd.net / ytd.hours) * 100) / 100, ytd.effectiveRate);
+
+    // And it is well under the nominal 30 €/h — in fact negative here, because
+    // contributions are owed by the calendar whether or not the work came in.
+    // Reporting that honestly is the whole point of the number.
+    assert.ok(ytd.effectiveRate < 30, `effective ${ytd.effectiveRate} under nominal 30`);
+    assert.ok(ytd.contributions > ytd.gross, 'a thin year costs more than it earns');
+
+    const clients = r.clients as { name: string; hours: number; effectiveRate: number }[];
+    assert.equal(clients[0]?.name, CLIENT.name);
+    assert.equal(clients[0]?.hours, 80);
+  });
+
+  it('offers both a cash view and a work view', async () => {
+    const c = await signUp('basis@example.com');
+    await c.put('/profile', PROFILE);
+    const byPayment = (await c.get('/earnings/effective-rate')).body as { basis: string };
+    const byService = (await c.get('/earnings/effective-rate?basis=service')).body as {
+      basis: string;
+    };
+    assert.equal(byPayment.basis, 'payment');
+    assert.equal(byService.basis, 'service');
   });
 });
 

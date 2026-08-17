@@ -1,18 +1,19 @@
 import { useMemo, useState } from 'react';
 import { invoiceReadiness } from '@reckon/shared';
 import { ProfileRequired } from '../components/ProfileRequired';
-import { PlusIcon } from '../components/icons';
+import { ClockIcon, EditIcon, PlusIcon } from '../components/icons';
 import { Field, Sheet } from '../components/ui';
 import {
   addDaysIso,
   fmtDateLabel,
   fmtMoney,
   hoursBetween,
+  monthStartIso,
   todayIso,
 } from '../lib/format';
 import { defaultClientId, selectableClients } from '../lib/clients';
 import { useStore } from '../store/context';
-import { btn, btnBlock, field, hint, input, label, row2 } from '../styles/cx';
+import { btn, btnBlock, field, hint, input, label, row2, tabSeg } from '../styles/cx';
 import { Select } from '../components/Select';
 import { DateField } from '../components/DateField';
 import { failureMessage } from '../lib/failure';
@@ -29,8 +30,14 @@ export function NewInvoiceSheet({
   openSheet?: OpenSheet;
   replaceSheet?: OpenSheet;
 }) {
-  const { data, generateInvoice, toast } = useStore();
+  const { data, generateInvoice, manualInvoice, toast } = useStore();
   const [saving, setSaving] = useState(false);
+  // Two ways to bill: from the hours on record, or for something that was
+  // never on the clock — a fixed fee, a call-out, a month of readiness.
+  const [mode, setMode] = useState<'hours' | 'manual'>('hours');
+  const [periodStart, setPeriodStart] = useState(monthStartIso(todayIso()));
+  const [periodEnd, setPeriodEnd] = useState(todayIso());
+  const [amount, setAmount] = useState('');
   const [clientId, setClientId] = useState(
     initialClientId ?? defaultClientId(data.clients),
   );
@@ -58,6 +65,32 @@ export function NewInvoiceSheet({
    * prices the invoice from the hours it locks, and the number is only really
    * decided once the unique index accepts it.
    */
+  const issueManual = async () => {
+    const total = parseFloat(amount);
+    if (!clientId || isNaN(total) || total <= 0) {
+      toast('Izberite stranko in vnesite znesek');
+      return;
+    }
+    setSaving(true);
+    try {
+      const invoice = await manualInvoice({
+        clientId,
+        issueDate,
+        dueDate,
+        description: description.trim(),
+        periodStart,
+        periodEnd,
+        total,
+      });
+      toast('Račun ' + invoice.number + ' ustvarjen');
+      onClose();
+    } catch (err) {
+      toast(failureMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const generate = async () => {
     if (checkedIds.length === 0) return;
     setSaving(true);
@@ -117,13 +150,35 @@ export function NewInvoiceSheet({
       footer={
         <button
           className={`${btn.primary} ${btnBlock}`}
-          disabled={saving || checkedIds.length === 0}
-          onClick={() => void generate()}
+          disabled={
+            saving ||
+            (mode === 'hours' ? checkedIds.length === 0 : !(parseFloat(amount) > 0))
+          }
+          onClick={() => void (mode === 'hours' ? generate() : issueManual())}
         >
           Ustvari račun
         </button>
       }
     >
+      <div className="mb-4 flex gap-0.5 rounded-lg bg-muted p-1">
+        <button
+          type="button"
+          className={tabSeg(mode === 'hours')}
+          onClick={() => setMode('hours')}
+        >
+          <ClockIcon className="size-3.5" />
+          Iz ur
+        </button>
+        <button
+          type="button"
+          className={tabSeg(mode === 'manual')}
+          onClick={() => setMode('manual')}
+        >
+          <EditIcon className="size-3.5" />
+          Brez ur
+        </button>
+      </div>
+
       <Field label="Stranka" htmlFor="invClient">
         <Select
           id="invClient"
@@ -151,7 +206,36 @@ export function NewInvoiceSheet({
         />
       </Field>
 
-      {candidates.length === 0 ? (
+      {mode === 'manual' ? (
+        <>
+          <div className={row2}>
+            <Field label="Obdobje od" htmlFor="invFrom">
+              <DateField id="invFrom" value={periodStart} onChange={setPeriodStart} />
+            </Field>
+            <Field label="Obdobje do" htmlFor="invTo">
+              <DateField id="invTo" value={periodEnd} onChange={setPeriodEnd} />
+            </Field>
+          </div>
+
+          <Field
+            label="Znesek (€)"
+            htmlFor="invAmount"
+            hint="Ta račun ne izhaja iz zabeleženih ur, zato znesek vnesete sami."
+          >
+            <input
+              id="invAmount"
+              className={input}
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              placeholder="450"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </Field>
+        </>
+      ) : candidates.length === 0 ? (
         <p className={`${hint} mb-4`}>
           Za to stranko ni neobračunanih ur.
         </p>

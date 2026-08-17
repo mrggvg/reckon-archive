@@ -95,6 +95,20 @@ zone, which shifted calendar days; and `z.uuid()` rejected the seed's
 hand-written identifiers, which Postgres accepts happily, making seeded rows
 unreachable through the API. Both are fixed and covered by tests.
 
+## 2b. The tax module
+
+Implemented from `tax-and-earnings-spec.md`; see `docs/tax-implementation.md`
+for what was verified, what was derived from the filings, and the five places
+the implementation departs from the spec.
+
+The one thing worth knowing here: the seminar's §6.1 status table now
+understates the app. Contributions, income tax, the trajectory chart, the
+contribution schedule with per-group payment codes, the payment ledger, the
+year-end reconciliation and the effective hourly rate all exist. The data model
+in §3 gained `contribution_periods`, `tax_payments` and `tax_assessments`, so
+the gap between "eight entities documented, six implemented" is now smaller —
+though `invoice_line` and `payment` are still design-only.
+
 ## 3. Things the brief did not specify that I decided
 
 - **UUID keys.** The brief offered "UUID or bigserial". I chose UUID and justified it in

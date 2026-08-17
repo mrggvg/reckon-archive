@@ -199,3 +199,8 @@ export function plural(
   if (r === 3 || r === 4) return `${n} ${few}`;
   return `${n} ${other}`;
 }
+
+/** The first of the month a date falls in — the usual start of a billing period. */
+export function monthStartIso(iso: string): string {
+  return iso.slice(0, 8) + '01';
+}

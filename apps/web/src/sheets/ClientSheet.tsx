@@ -32,6 +32,10 @@ export function ClientSheet({
   const { createClient, updateClient, toast } = useStore();
   const [saving, setSaving] = useState(false);
   const [looking, setLooking] = useState(false);
+  // What the server said when it found nothing — which register it asked and
+  // therefore what the absence means. Shown under the field, with somewhere
+  // to go next.
+  const [registryNote, setRegistryNote] = useState('');
   // Whatever was last asked about, so a second keystroke can't ask again.
   const asked = useRef('');
   const [form, setForm] = useState({
@@ -65,6 +69,7 @@ export function ClientSheet({
   const lookUp = async (taxNumber: string, quiet = false) => {
     asked.current = taxNumber;
     setLooking(true);
+    setRegistryNote('');
     try {
       const found = await resources.lookup.company(taxNumber);
       setForm((f) => ({
@@ -77,8 +82,9 @@ export function ClientSheet({
       setErrors({});
       toast(found.source === 'ajpes' ? 'Podatki iz AJPES' : 'Podatki iz registra DDV');
     } catch (err) {
-      // An automatic lookup that finds nothing says nothing: the user is
-      // typing, not asking. Pressing the button is asking.
+      if (err instanceof ApiError && err.status === 404) setRegistryNote(err.message);
+      // An automatic lookup that finds nothing stays quiet in the toast: the
+      // user is typing, not asking. The hint under the field says it instead.
       if (quiet) return;
       toast(
         err instanceof ApiError
@@ -149,10 +155,25 @@ export function ClientSheet({
         htmlFor="clientTax"
         error={errors.taxNumber}
         hint={
-          looking
-            ? 'Iščem v registru …'
-            : 'Vnesite davčno številko in podatki se izpolnijo sami.'
-        }
+            looking ? (
+              'Iščem v registru …'
+            ) : registryNote ? (
+              <>
+                {registryNote}. Podatke lahko prepišete iz{' '}
+                <a
+                  className="font-semibold text-primary underline underline-offset-2"
+                  href="https://www.ajpes.si/prs/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  poslovnega registra AJPES
+                </a>{' '}
+                ali jih vnesete ročno.
+              </>
+            ) : (
+              'Vnesite davčno številko in podatki se izpolnijo sami.'
+            )
+          }
       >
         <div className="relative">
           <input

@@ -7,6 +7,7 @@ import { invoicesRouter } from './modules/invoices/invoices.routes.js';
 import { lookupRouter } from './modules/lookup/lookup.routes.js';
 import { profileRouter } from './modules/profile/profile.routes.js';
 import { sessionsRouter } from './modules/sessions/sessions.routes.js';
+import { earningsRouter, taxRouter } from './modules/tax/tax.routes.js';
 
 export const router = Router();
 
@@ -22,3 +23,5 @@ router.use('/clients', clientsRouter);
 router.use('/sessions', sessionsRouter);
 router.use('/invoices', invoicesRouter);
 router.use('/lookup', lookupRouter);
+router.use('/tax', taxRouter);
+router.use('/earnings', earningsRouter);

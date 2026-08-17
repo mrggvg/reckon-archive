@@ -72,6 +72,42 @@ one connection each is what a free-tier database can survive.
 `apps/api/vercel.json` sends every path to `api/index.ts`, which exports the
 same Express app that runs locally — no second code path to keep in step.
 
+## 3a. Filling clients in from their tax number
+
+Out of the box the lookup uses **VIES**, which is free, needs no account, and
+covers every VAT-registered company — which is nearly every customer an invoice
+is addressed to. Nothing to configure.
+
+It cannot cover entities that aren't registered for VAT, and that includes most
+one-person s.p.s — including, most likely, **your own profile**. The only
+programmatic route into the business register itself is AJPES `restPrsInfo`,
+which needs an account, a subscribed PRS scheme and query units under their
+tariff. If you have that, three variables switch it on and it becomes the first
+source tried:
+
+```
+AJPES_USER=<username registered at ajpes.si>
+AJPES_PASSWORD=<its password>
+AJPES_SCHEME=<the PRS scheme code, e.g. PRS_MN_P>
+```
+
+When neither of the official sources knows the number, the lookup falls back to
+**bizi.si**, which republishes the business register and therefore does know the
+one-person s.p.s that VIES has never heard of — including, most likely, yours.
+Its `robots.txt` permits crawling, and this is one cached request per lookup,
+made only after the official sources came back empty, with a User-Agent that
+says what it is. Their terms may still restrict systematic reuse, so it is a
+switch rather than a fact of the app:
+
+```
+BIZI_FALLBACK=off     # ask only AJPES and VIES
+```
+
+The parser is anchored on what the cells contain rather than their order, and
+returns "not found" rather than an error if the page ever changes past
+recognition — so the worst case is the form staying empty, which is where it
+started.
+
 ## 4. The web project
 
 | Setting | Value |

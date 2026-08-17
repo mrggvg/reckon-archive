@@ -3,10 +3,12 @@ import {
   invoiceEditSchema,
   invoiceGenerateSchema,
   invoiceImportSchema,
+  invoiceManualSchema,
   invoicePaymentSchema,
   type InvoiceEditInput,
   type InvoiceGenerateInput,
   type InvoiceImportInput,
+  type InvoiceManualInput,
   type InvoicePaymentInput,
 } from '@reckon/shared';
 import { asyncHandler } from '../../lib/asyncHandler.js';
@@ -38,6 +40,18 @@ invoicesRouter.post(
     const created = await invoicesService.generate(
       req.session.userId!,
       req.body as InvoiceGenerateInput,
+    );
+    res.status(201).json(created);
+  }),
+);
+
+invoicesRouter.post(
+  '/manual',
+  validateBody(invoiceManualSchema),
+  asyncHandler(async (req, res) => {
+    const created = await invoicesService.manual(
+      req.session.userId!,
+      req.body as InvoiceManualInput,
     );
     res.status(201).json(created);
   }),

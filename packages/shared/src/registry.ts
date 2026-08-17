@@ -16,8 +16,30 @@ export interface RegistryCompany {
   postalCode: string;
   city: string;
   taxNumber: string;
+  /** Only AJPES knows this; VIES doesn't carry it. */
+  regNumber?: string;
   /** Which register answered, so the interface can say. */
-  source: 'ajpes' | 'vies';
+  source: 'ajpes' | 'vies' | 'bizi';
+}
+
+/**
+ * `Placar 042 A` → `Placar 42 A`.
+ *
+ * AJPES pads house numbers to three digits for sorting. Nobody writes their
+ * address that way, and it would look like a typo on an invoice.
+ */
+export function unpadHouseNumber(street: string): string {
+  return street.replace(/(^|\s)0+(\d)/g, '$1$2');
+}
+
+/** `2250 Ptuj` → the code and the place, which AJPES sends as one string. */
+export function splitPostalPlace(posta: string): {
+  postalCode: string;
+  city: string;
+} {
+  const m = /^\s*(\d{4})\s+(.+?)\s*$/.exec(posta ?? '');
+  if (!m) return { postalCode: '', city: tidyPlaceName(posta ?? '') };
+  return { postalCode: m[1] as string, city: tidyPlaceName(m[2] as string) };
 }
 
 /** Legal forms stay lower case however the register writes them. */
@@ -112,7 +134,8 @@ export function parseRegistryAddress(raw: string): {
   const line = raw.replace(/\s*\n\s*/g, ', ').replace(/\s+/g, ' ').trim();
   const parts = parseAddressLine(line);
   return {
-    street: tidyPlaceName(parts.street),
+    // VIES pads house numbers the same way AJPES does: `Dunajska cesta 007`.
+    street: tidyPlaceName(unpadHouseNumber(parts.street)),
     postalCode: parts.postalCode,
     city: tidyPlaceName(parts.city),
   };

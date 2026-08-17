@@ -67,6 +67,34 @@ export const invoiceGenerateSchema = z
 
 export type InvoiceGenerateInput = z.infer<typeof invoiceGenerateSchema>;
 
+/**
+ * An invoice the app issues without any hours behind it.
+ *
+ * Not every job is billed by the clock — a fixed fee, a retainer, a call-out.
+ * The caller states the period and the amount, and the app numbers it and
+ * prints it like any other invoice it issued.
+ */
+export const invoiceManualSchema = z
+  .object({
+    clientId: uuid,
+    issueDate: isoDate,
+    dueDate: isoDate,
+    description: z.string().trim().max(300),
+    periodStart: isoDate,
+    periodEnd: isoDate,
+    total: z.number().positive('Znesek mora biti večji od 0'),
+  })
+  .refine((v) => v.dueDate >= v.issueDate, {
+    path: ['dueDate'],
+    message: 'Rok plačila ne more biti pred datumom izdaje',
+  })
+  .refine((v) => v.periodEnd >= v.periodStart, {
+    path: ['periodEnd'],
+    message: 'Konec obdobja ne more biti pred začetkom',
+  });
+
+export type InvoiceManualInput = z.infer<typeof invoiceManualSchema>;
+
 /** Recording an invoice issued outside the app: the caller states the total. */
 export const invoiceImportSchema = z
   .object({
@@ -122,6 +150,55 @@ export const invoiceEditSchema = z.object({
 });
 
 export type InvoiceEditInput = z.infer<typeof invoiceEditSchema>;
+
+/**
+ * The issuer's tax position: what drives the contribution schedule and which
+ * set of income-tax bands applies.
+ */
+const contributionAccount = z
+  .object({
+    iban: z.string().trim().max(34).default(''),
+    reference: z.string().trim().max(30).default(''),
+  })
+  .default({ iban: '', reference: '' });
+
+export const taxProfileSchema = z.object({
+  businessStartDate: isoDate.nullable(),
+  /** Full monthly insurance base; FURS revises it, so the user can too. */
+  contributionBase: z.number().nonnegative(),
+  /** Overrides the computed relief tier when a filing disagrees with it. */
+  contributionReliefOverride: z.number().min(0).max(1).nullable(),
+  normiranecKind: z.enum(['full', 'part']),
+  declaredMonthlyEstimate: z.number().nonnegative().nullable(),
+  officialInstallment: z.number().nonnegative().nullable(),
+  officialInstallmentFrequency: z.enum(['monthly', 'quarterly']).nullable(),
+  dohodninaIban: z.string().trim().max(34),
+  dohodninaReference: z.string().trim().max(30),
+  weeklyHours: z.number().int().min(1).max(80),
+  /**
+   * Where each group of contributions is paid. Kept on the profile so a month
+   * can be paid before its filing exists — which is the whole point, since
+   * FURS states the amount around the 20th of the following month.
+   */
+  contributionAccounts: z
+    .object({
+      piz: contributionAccount,
+      zzDo: contributionAccount,
+      stv: contributionAccount,
+      zap: contributionAccount,
+    })
+    // Absent means "not confirmed yet", which is a legitimate state: the
+    // amounts are still computed, there is simply nowhere to pay them from
+    // the app until the user says where.
+    .default({
+      piz: { iban: '', reference: '' },
+      zzDo: { iban: '', reference: '' },
+      stv: { iban: '', reference: '' },
+      zap: { iban: '', reference: '' },
+    }),
+});
+
+export type TaxProfileInput = z.infer<typeof taxProfileSchema>;
 
 export const invoicePaymentSchema = z.object({
   paid: z.boolean(),

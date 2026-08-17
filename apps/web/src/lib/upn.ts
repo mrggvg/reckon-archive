@@ -67,13 +67,66 @@ export function buildUpnQrString(profile: Profile, invoice: Invoice): string | n
   return fields.concat([upnControlSum(fields), '']).join('\n');
 }
 
-/** Returns the QR as an SVG path string plus viewBox size, or null if unusable. */
-export function buildUpnQr(
-  profile: Profile,
-  invoice: Invoice,
-): { path: string; box: number } | null {
+/**
+ * A UPN QR for something the user *owes*, with the roles the other way round.
+ *
+ * On an invoice the user is the recipient and the reference is deliberately
+ * empty. Here the user is the payer, FURS is the recipient, and the reference
+ * is the most important field on the form: it is what decides which obligation
+ * the money is credited against. It is therefore taken as given — copied from
+ * the filing — and never derived here.
+ */
+export function buildObligationQrString({
+  profile,
+  amount,
+  iban,
+  reference,
+  purpose,
+}: {
+  profile: Profile;
+  amount: number;
+  iban: string;
+  reference: string;
+  purpose: string;
+}): string | null {
+  const account = iban.replace(/\s+/g, '').toUpperCase();
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{4,30}$/.test(account)) return null;
+  const sklic = reference.replace(/\s+/g, '').toUpperCase();
+  if (!/^(SI|RF)\d{2}[0-9A-Z-]{1,22}$/.test(sklic)) return null;
+
+  const amountCents = Math.round(amount * 100);
+  if (!(amountCents > 0) || amountCents >= 1e11) return null;
+
+  const payer = (profile.name || '').trim();
+  const payerStreet = (profile.street || '').slice(0, 33);
+  const payerCity = [profile.postalCode, profile.city].filter(Boolean).join(' ').slice(0, 33);
+
+  const fields = [
+    'UPNQR',
+    '', '', '', '',
+    payer.slice(0, 33),
+    payerStreet,
+    payerCity,
+    String(amountCents).padStart(11, '0'),
+    '', '',
+    // Tax and contributions; the code the form prescribes for public dues.
+    'TAXS',
+    purpose.slice(0, 42),
+    '',
+    account,
+    sklic.slice(0, 26),
+    // The recipient as it appears on a FURS payment order. Not scan-verified
+    // yet, which is why the printed details beside the code are the ones to
+    // trust until it has been.
+    'FURS',
+    '',
+    '',
+  ];
+  return fields.concat([upnControlSum(fields), '']).join('\n');
+}
+
+function renderQr(text: string | null): { path: string; box: number } | null {
   try {
-    const text = buildUpnQrString(profile, invoice);
     if (!text) return null;
     const bytes = toIso88592Bytes(text);
     const segs = [makeEciSegment(4), makeBytesSegment(bytes)];
@@ -84,4 +137,22 @@ export function buildUpnQr(
     console.error('UPN QR generation failed', e);
     return null;
   }
+}
+
+export function buildObligationQr(args: {
+  profile: Profile;
+  amount: number;
+  iban: string;
+  reference: string;
+  purpose: string;
+}): { path: string; box: number } | null {
+  return renderQr(buildObligationQrString(args));
+}
+
+/** Returns the QR as an SVG path string plus viewBox size, or null if unusable. */
+export function buildUpnQr(
+  profile: Profile,
+  invoice: Invoice,
+): { path: string; box: number } | null {
+  return renderQr(buildUpnQrString(profile, invoice));
 }

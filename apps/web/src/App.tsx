@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import {
   AlertIcon,
+  BillingIcon,
   ClientsIcon,
   ClockIcon,
   DownloadIcon,
@@ -19,6 +20,8 @@ import { EditInvoiceSheet } from './sheets/EditInvoiceSheet';
 import { EntrySheet } from './sheets/EntrySheet';
 import { ImportInvoiceSheet } from './sheets/ImportInvoiceSheet';
 import { NewInvoiceSheet } from './sheets/NewInvoiceSheet';
+import { ContributionSheet } from './sheets/ContributionSheet';
+import { TaxPaymentSheet } from './sheets/TaxPaymentSheet';
 import { TimesheetSheet } from './sheets/TimesheetSheet';
 import { ViewInvoiceSheet } from './sheets/ViewInvoiceSheet';
 import { iconBtn } from './styles/cx';
@@ -43,6 +46,7 @@ type Screen = TabName | 'profile';
 import { ClientsView } from './views/ClientsView';
 import { InvoicesView } from './views/InvoicesView';
 import { ProfileView } from './views/ProfileView';
+import { TaxView } from './views/TaxView';
 import { TrackView } from './views/TrackView';
 
 /** What the phone's add button does on each tab. */
@@ -50,6 +54,7 @@ const FAB_LABEL: Record<TabName, string> = {
   track: 'Vnesi ure',
   clients: 'Nova stranka',
   invoices: 'Nov račun',
+  tax: 'Zabeleži plačilo',
 };
 
 const TAB_DEFS: {
@@ -60,6 +65,7 @@ const TAB_DEFS: {
   { name: 'track', label: 'Ure', icon: ClockIcon },
   { name: 'clients', label: 'Stranke', icon: ClientsIcon },
   { name: 'invoices', label: 'Računi', icon: InvoiceIcon },
+  { name: 'tax', label: 'Davki', icon: BillingIcon },
 ];
 
 export default function App() {
@@ -105,6 +111,9 @@ export default function App() {
     if (tab === 'track') openSheet({ kind: 'entry' });
     else if (tab === 'clients') openSheet({ kind: 'client' });
     else if (tab === 'invoices') openSheet({ kind: 'newInvoice' });
+    else if (tab === 'tax') {
+      openSheet({ kind: 'taxPayment', year: new Date().getFullYear() });
+    }
   };
 
   const profileReady = invoiceReadiness(data.profile).ready;
@@ -126,6 +135,8 @@ export default function App() {
     track: data.sessions.length,
     clients: data.clients.length,
     invoices: data.invoices.length,
+    // The tax tab counts nothing: its figures are computed, not collected.
+    tax: 0,
   };
   const TABS = TAB_DEFS.map((t) => ({ ...t, count: counts[t.name] || '' }));
 
@@ -286,6 +297,7 @@ export default function App() {
             {tab === 'track' && <TrackView openSheet={openSheet} />}
             {tab === 'clients' && <ClientsView openSheet={openSheet} />}
             {tab === 'invoices' && <InvoicesView openSheet={openSheet} />}
+            {tab === 'tax' && <TaxView openSheet={openSheet} />}
             {tab === 'profile' && <ProfileView openSheet={openSheet} />}
           </div>
         </main>
@@ -377,6 +389,12 @@ export default function App() {
                   onClose={closeSheet}
                   openSheet={openSheet}
                 />
+              )}
+              {sheet.kind === 'contribution' && (
+                <ContributionSheet year={sheet.year} onClose={closeSheet} />
+              )}
+              {sheet.kind === 'taxPayment' && (
+                <TaxPaymentSheet year={sheet.year} onClose={closeSheet} />
               )}
               {sheet.kind === 'timesheet' && (
                 <TimesheetSheet id={sheet.id} onClose={closeSheet} />

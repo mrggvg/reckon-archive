@@ -17,7 +17,7 @@ export function EditInvoiceSheet({
   onClose: () => void;
   openSheet?: OpenSheet;
 }) {
-  const { data, updateInvoice, toast } = useStore();
+  const { data, updateInvoice, setInvoicePaid, toast } = useStore();
   const [saving, setSaving] = useState(false);
   const inv = data.invoices.find((i) => i.id === id);
 
@@ -29,6 +29,9 @@ export function EditInvoiceSheet({
   const [periodStart, setPeriodStart] = useState(inv?.periodStart ?? '');
   const [periodEnd, setPeriodEnd] = useState(inv?.periodEnd ?? '');
   const [total, setTotal] = useState(inv ? String(inv.total) : '');
+  // The date money arrived is not cosmetic: revenue counts in the year it was
+  // received, so a payment logged on the wrong day lands in the wrong tax year.
+  const [paidDate, setPaidDate] = useState(inv?.paidDate ?? '');
 
   if (!inv) {
     return (
@@ -68,6 +71,12 @@ export function EditInvoiceSheet({
             }
           : {}),
       });
+
+      // Payment has its own endpoint, because marking paid and un-paying are
+      // one operation with the date attached — this only corrects the date.
+      if (inv.status === 'paid' && paidDate && paidDate !== inv.paidDate) {
+        await setInvoicePaid(id, true, paidDate);
+      }
     } catch (err) {
       toast(failureMessage(err));
       setSaving(false);
@@ -126,6 +135,16 @@ export function EditInvoiceSheet({
         />
         </Field>
       </div>
+
+      {inv.status === 'paid' && (
+        <Field
+          label="Datum plačila"
+          htmlFor="editInvPaidDate"
+          hint="Dan, ko je denar prišel — po tem datumu se prihodek šteje v davčno leto."
+        >
+          <DateField id="editInvPaidDate" value={paidDate} onChange={setPaidDate} />
+        </Field>
+      )}
 
       {isImported ? (
         <>

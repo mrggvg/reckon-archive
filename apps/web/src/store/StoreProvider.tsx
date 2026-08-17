@@ -5,6 +5,7 @@ import type {
   InvoiceEditInput,
   InvoiceGenerateInput,
   InvoiceImportInput,
+  InvoiceManualInput,
   ProfileInput,
   SessionInput,
 } from '@reckon/shared';
@@ -165,6 +166,13 @@ export function StoreProvider({
       generateInvoice: async (input: InvoiceGenerateInput) => {
         const invoice = await resources.invoices.generate(input);
         await reload();
+        return invoice;
+      },
+
+      // Nothing is billed by it, so the ledger's hours are untouched.
+      manualInvoice: async (input: InvoiceManualInput) => {
+        const invoice = await resources.invoices.manual(input);
+        upsertInvoice(invoice);
         return invoice;
       },
 

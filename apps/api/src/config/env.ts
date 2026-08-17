@@ -18,6 +18,11 @@ const envSchema = z.object({
   // account with a subscribed scheme and query units to spend. Without these
   // the lookup falls back to VIES, which needs nothing and covers every
   // VAT-registered company.
+  // bizi.si republishes the business register and answers for entities VIES
+  // has never heard of — most one-person s.p.s. Its robots.txt permits
+  // crawling; this is one cached request per lookup, only after the official
+  // sources came back empty. Set to 'off' to stop asking it entirely.
+  BIZI_FALLBACK: z.enum(['on', 'off']).default('on'),
   AJPES_USER: z.string().optional(),
   AJPES_PASSWORD: z.string().optional(),
   AJPES_SCHEME: z.string().optional(),

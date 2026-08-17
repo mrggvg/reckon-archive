@@ -4,6 +4,7 @@ import type {
   InvoiceEditInput,
   InvoiceGenerateInput,
   InvoiceImportInput,
+  InvoiceManualInput,
   ProfileInput,
   SessionInput,
 } from '@reckon/shared';
@@ -36,6 +37,7 @@ export interface StoreValue {
   removeSession: (id: string) => Promise<void>;
 
   generateInvoice: (input: InvoiceGenerateInput) => Promise<Invoice>;
+  manualInvoice: (input: InvoiceManualInput) => Promise<Invoice>;
   importInvoice: (input: InvoiceImportInput) => Promise<Invoice>;
   updateInvoice: (id: string, input: InvoiceEditInput) => Promise<void>;
   setInvoicePaid: (id: string, paid: boolean, paidDate: string | null) => Promise<void>;

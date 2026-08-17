@@ -1,10 +1,13 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   POSTAL_CODE_LENGTH,
   TAX_NUMBER_LENGTH,
   fieldErrors,
   invoiceReadiness,
   profileSchema,
+  suggestedContributionPayments,
+  taxNumberSchema,
+  type TaxProfileInput,
 } from '@reckon/shared';
 import { useAuth } from '../auth/context';
 import {
@@ -17,21 +20,34 @@ import {
   HardDriveIcon,
   InvoiceIcon,
   SignOutIcon,
+  SearchIcon,
+  BillingIcon as PaymentIcon,
   SlidersIcon,
   UploadIcon,
   UserIcon,
 } from '../components/icons';
 import { Select } from '../components/Select';
 import { Field, SectionHead } from '../components/ui';
+import { ApiError } from '../lib/api';
 import { downloadBlob } from '../lib/download';
 import { failureMessage } from '../lib/failure';
+import { resources } from '../lib/resources';
+import { DateField } from '../components/DateField';
 import { exportInvoicesCsv } from '../lib/exportInvoices';
 import type { OpenSheet } from '../lib/sheets';
 import { todayIso } from '../lib/format';
 import { DEFAULT_VAT_CLAUSE, normalize } from '../lib/storage';
 import type { Profile } from '../lib/types';
 import { useStore } from '../store/context';
-import { btn, btnBlock, btnSm, hint, input, row2 } from '../styles/cx';
+import { btn, btnBlock, btnSm, cardLabel, hint, input, row2 } from '../styles/cx';
+
+/** The four groups, as the filing names them. */
+const CONTRIBUTION_FIELDS = [
+  { key: 'piz', label: 'PIZ', full: 'Pokojninsko in invalidsko' },
+  { key: 'zzDo', label: 'ZZ + DO', full: 'Zdravstveno in dolgotrajna oskrba' },
+  { key: 'stv', label: 'STV', full: 'Starševsko varstvo' },
+  { key: 'zap', label: 'ZAP', full: 'Zaposlovanje' },
+] as const;
 
 const digitsOnly = (value: string, max: number) =>
   value.replace(/\D/g, '').slice(0, max);
@@ -87,9 +103,53 @@ export function ProfileView({ openSheet }: { openSheet: OpenSheet }) {
     vatClause: data.profile.vatClause || DEFAULT_VAT_CLAUSE,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [looking, setLooking] = useState(false);
+  // The tax position is loaded and saved on its own: it describes what the
+  // business owes, not what its invoices say.
+  const [tax, setTax] = useState<TaxProfileInput | null>(null);
+  const [taxDirty, setTaxDirty] = useState(false);
+  // What the server said when it found nothing — which register it asked and
+  // therefore what the absence means. Shown under the field, with somewhere
+  // to go next.
+  const [registryNote, setRegistryNote] = useState('');
+  const asked = useRef('');
 
   // Read from the form, not the store, so the banner clears as you type.
   const readiness = invoiceReadiness(form);
+
+  useEffect(() => {
+    let cancelled = false;
+    void resources.profile
+      .tax()
+      .then((t) => {
+        if (!cancelled) setTax(t);
+      })
+      .catch(() => {
+        /* the rest of the profile still works without it */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const setTaxField = <K extends keyof TaxProfileInput>(
+    key: K,
+    value: TaxProfileInput[K],
+  ) => {
+    setTax((t) => (t ? { ...t, [key]: value } : t));
+    setTaxDirty(true);
+  };
+
+  const saveTax = async () => {
+    if (!tax) return;
+    try {
+      setTax(await resources.profile.saveTax(tax));
+      setTaxDirty(false);
+      toast('Davčni podatki shranjeni');
+    } catch (err) {
+      toast(failureMessage(err));
+    }
+  };
 
   const stored: Profile = {
     ...data.profile,
@@ -104,6 +164,53 @@ export function ProfileView({ openSheet }: { openSheet: OpenSheet }) {
         ? Object.fromEntries(Object.entries(e).filter(([k]) => k !== key))
         : e,
     );
+  };
+
+  /**
+   * Fills the issuer's own details from the business register.
+   *
+   * Worth saying plainly: a one-person s.p. is usually not registered for VAT,
+   * and VIES only knows those who are — so unless AJPES credentials are
+   * configured this will often find nothing, and says so rather than pretending
+   * the entity doesn't exist.
+   */
+  const lookUp = async (taxNumber: string, quiet = false) => {
+    asked.current = taxNumber;
+    setLooking(true);
+    setRegistryNote('');
+    try {
+      const found = await resources.lookup.company(taxNumber);
+      setForm((f) => ({
+        ...f,
+        name: found.name,
+        street: found.street,
+        postalCode: found.postalCode,
+        city: found.city,
+        // Only AJPES carries it; leave what's typed when VIES answered.
+        regNumber: found.regNumber ?? f.regNumber,
+      }));
+      setErrors({});
+      toast(found.source === 'ajpes' ? 'Podatki iz AJPES' : 'Podatki iz registra DDV');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) setRegistryNote(err.message);
+      if (quiet) return;
+      toast(
+        err instanceof ApiError
+          ? err.message
+          : 'Registra ni bilo mogoče doseči — vnesite podatke ročno',
+      );
+    } finally {
+      setLooking(false);
+    }
+  };
+
+  const setTaxNumber = (value: string) => {
+    const digits = digitsOnly(value, TAX_NUMBER_LENGTH);
+    set('taxNumber', digits);
+    const complete = taxNumberSchema.safeParse(digits).success;
+    if (complete && !form.name.trim() && asked.current !== digits) {
+      void lookUp(digits, true);
+    }
   };
 
   const save = async () => {
@@ -239,6 +346,56 @@ export function ProfileView({ openSheet }: { openSheet: OpenSheet }) {
         description="Naziv in naslov, kot ju zahteva 82. člen ZDDV-1."
       >
         <Field
+          label="Davčna številka"
+          htmlFor="pTaxNumber"
+          error={errors.taxNumber}
+          hint={
+            looking ? (
+              'Iščem v registru …'
+            ) : registryNote ? (
+              <>
+                {registryNote}. Podatke lahko prepišete iz{' '}
+                <a
+                  className="font-semibold text-primary underline underline-offset-2"
+                  href="https://www.ajpes.si/prs/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  poslovnega registra AJPES
+                </a>{' '}
+                ali jih vnesete ročno.
+              </>
+            ) : (
+              'Vnesite davčno številko in podatki se izpolnijo sami.'
+            )
+          }
+        >
+          <div className="relative">
+            <input
+              id="pTaxNumber"
+              className={cls('taxNumber') + ' pr-11'}
+              type="text"
+              inputMode="numeric"
+              maxLength={TAX_NUMBER_LENGTH}
+              placeholder="82426490"
+              value={form.taxNumber}
+              aria-invalid={invalid('taxNumber')}
+              onChange={(e) => setTaxNumber(e.target.value)}
+            />
+            <button
+              type="button"
+              className="absolute inset-y-0 right-0 flex w-11 cursor-pointer items-center justify-center text-muted-fg hover:text-fg disabled:opacity-40"
+              onClick={() => void lookUp(form.taxNumber)}
+              disabled={looking || !taxNumberSchema.safeParse(form.taxNumber).success}
+              aria-label="Poišči v registru"
+              title="Poišči v registru"
+            >
+              <SearchIcon className="size-4" />
+            </button>
+          </div>
+        </Field>
+
+        <Field
           label="Ime in priimek / naziv"
           htmlFor="pName"
           error={errors.name}
@@ -317,26 +474,6 @@ export function ProfileView({ openSheet }: { openSheet: OpenSheet }) {
         description="Podatki iz odločbe AJPES in statusa pri FURS."
       >
         <div className={row2}>
-          <Field
-            label="Davčna številka"
-            htmlFor="pTaxNumber"
-            error={errors.taxNumber}
-            hint={`${form.taxNumber.length}/${TAX_NUMBER_LENGTH} mest`}
-          >
-            <input
-              id="pTaxNumber"
-              className={cls('taxNumber')}
-              type="text"
-              inputMode="numeric"
-              maxLength={TAX_NUMBER_LENGTH}
-              placeholder="82426490"
-              value={form.taxNumber}
-              aria-invalid={invalid('taxNumber')}
-              onChange={(e) =>
-                set('taxNumber', digitsOnly(e.target.value, TAX_NUMBER_LENGTH))
-              }
-            />
-          </Field>
           <Field
             label={
               <>
@@ -518,6 +655,199 @@ export function ProfileView({ openSheet }: { openSheet: OpenSheet }) {
           </div>
         </Section>
       </div>
+
+      {tax && (
+        <Section
+          icon={<PaymentIcon className="size-4" />}
+          title="Davki in prispevki"
+          description="Datum začetka dejavnosti in zavarovalna osnova poganjata izračun prispevkov; vrsta normiranca določa davčne stopnje."
+        >
+          <div className={row2}>
+            <Field
+              label="Začetek dejavnosti"
+              htmlFor="pStart"
+              hint="Z odločbe o vpisu; določa olajšavo na prispevke."
+            >
+              <DateField
+                id="pStart"
+                value={tax.businessStartDate ?? ''}
+                onChange={(v) => setTaxField('businessStartDate', v || null)}
+              />
+            </Field>
+            <Field
+              label="Zavarovalna osnova (€)"
+              htmlFor="pBase"
+              hint="Polna mesečna osnova; FURS jo letno spremeni."
+            >
+              <input
+                id="pBase"
+                className={input}
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={tax.contributionBase}
+                onChange={(e) =>
+                  setTaxField('contributionBase', parseFloat(e.target.value) || 0)
+                }
+              />
+            </Field>
+          </div>
+
+          <Field label="Vrsta normiranca" htmlFor="pKind">
+            <Select
+              id="pKind"
+              value={tax.normiranecKind}
+              onChange={(v) => setTaxField('normiranecKind', v as 'full' | 'part')}
+              options={[
+                { value: 'full', label: 'Polni normiranec' },
+                { value: 'part', label: 'Popoldanski normiranec' },
+              ]}
+            />
+          </Field>
+
+          <div className={row2}>
+            <Field
+              label={
+                <>
+                  Uradna akontacija (€){' '}
+                  <span className="font-normal text-muted-fg">(neobvezno)</span>
+                </>
+              }
+              htmlFor="pInstallment"
+              hint="Znesek z odločbe DD-IPDO. Le za primerjavo."
+            >
+              <input
+                id="pInstallment"
+                className={input}
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={tax.officialInstallment ?? ''}
+                onChange={(e) =>
+                  setTaxField(
+                    'officialInstallment',
+                    e.target.value === '' ? null : parseFloat(e.target.value),
+                  )
+                }
+              />
+            </Field>
+            <Field label="Pogostost akontacije" htmlFor="pFreq">
+              <Select
+                id="pFreq"
+                value={tax.officialInstallmentFrequency ?? ''}
+                onChange={(v) =>
+                  setTaxField(
+                    'officialInstallmentFrequency',
+                    v === '' ? null : (v as 'monthly' | 'quarterly'),
+                  )
+                }
+                options={[
+                  { value: '', label: 'Ni določena' },
+                  { value: 'monthly', label: 'Mesečno' },
+                  { value: 'quarterly', label: 'Četrtletno' },
+                ]}
+              />
+            </Field>
+          </div>
+
+          {/*
+            Confirmed once, used every month — including for months FURS has
+            not yet filed, which is the whole point: being paid early should
+            mean being able to pay early.
+          */}
+          <div className={cardLabel}>Računi za plačilo prispevkov</div>
+          <p className={`${hint} mb-3`}>
+            Preverite jih na svojem obračunu PODO-OPSVZ. FURS po sklicu ve, katero
+            obveznost plačujete — napačen sklic pomeni, da denar pride, obveznost pa
+            ostane odprta.
+          </p>
+
+          {CONTRIBUTION_FIELDS.map((g) => (
+            <div className="mb-3 rounded-lg border border-border bg-bg p-3" key={g.key}>
+              <div className="mb-2 text-xs font-semibold">
+                {g.label}
+                <span className="ml-1.5 font-normal text-muted-fg">{g.full}</span>
+              </div>
+              <div className={row2}>
+                <Field label="Račun (IBAN)" htmlFor={`pa-${g.key}-iban`}>
+                  <input
+                    id={`pa-${g.key}-iban`}
+                    className={input}
+                    type="text"
+                    value={tax.contributionAccounts[g.key].iban}
+                    onChange={(e) =>
+                      setTaxField('contributionAccounts', {
+                        ...tax.contributionAccounts,
+                        [g.key]: {
+                          ...tax.contributionAccounts[g.key],
+                          iban: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Sklic" htmlFor={`pa-${g.key}-ref`}>
+                  <input
+                    id={`pa-${g.key}-ref`}
+                    className={input}
+                    type="text"
+                    value={tax.contributionAccounts[g.key].reference}
+                    onChange={(e) =>
+                      setTaxField('contributionAccounts', {
+                        ...tax.contributionAccounts,
+                        [g.key]: {
+                          ...tax.contributionAccounts[g.key],
+                          reference: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+            </div>
+          ))}
+
+          {!Object.values(tax.contributionAccounts).some((a) => a.iban) && (
+            <button
+              className={`${btn.outline} ${btnSm} mb-4`}
+              onClick={() =>
+                setTaxField(
+                  'contributionAccounts',
+                  suggestedContributionPayments(form.taxNumber),
+                )
+              }
+              disabled={!form.taxNumber}
+            >
+              Predlagaj običajne račune in sklice
+            </button>
+          )}
+
+          <Field
+            label="Sklic za dohodnino"
+            htmlFor="pDohRef"
+            hint="FURS po sklicu ve, katero obveznost plačujete — preverite ga na svojem obračunu."
+          >
+            <input
+              id="pDohRef"
+              className={input}
+              type="text"
+              placeholder="SI19 12345678-40002"
+              value={tax.dohodninaReference}
+              onChange={(e) => setTaxField('dohodninaReference', e.target.value)}
+            />
+          </Field>
+
+          <button
+            className={`${btn.outline} ${btnSm}`}
+            onClick={() => void saveTax()}
+            disabled={!taxDirty}
+          >
+            {taxDirty ? 'Shrani davčne podatke' : 'Davčni podatki shranjeni'}
+          </button>
+        </Section>
+      )}
 
       <Section
         icon={<HardDriveIcon className="size-4" />}

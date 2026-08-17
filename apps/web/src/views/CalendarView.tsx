@@ -2,9 +2,11 @@ import { useMemo, useRef, useState } from 'react';
 import {
   MONTH_NAMES,
   WEEKDAY_NAMES,
+  addDaysIso,
   clientColor,
   fmtHours,
   fmtHoursCompact,
+  fmtMoney,
   hoursBetween,
   isoOf,
   todayIso,
@@ -16,7 +18,24 @@ import {
   ChevronRightIcon,
   ClientsIcon,
 } from '../components/icons';
-import { sessionBillingLabel } from '../lib/invoice';
+import { invoiceStatusComputed, sessionBillingLabel } from '../lib/invoice';
+import type { InvoiceStatus } from '../lib/types';
+
+/** One invoice, as a day inside its period needs to know it. */
+interface InvoiceBand {
+  id: string;
+  number: string;
+  client: string;
+  total: number;
+  status: InvoiceStatus;
+}
+
+/** The same three colours the invoice list uses for a status. */
+const INVOICE_BAND: Record<InvoiceStatus, string> = {
+  paid: 'bg-secondary',
+  unpaid: 'bg-accent',
+  overdue: 'bg-destructive',
+};
 
 /** The billing cycle, in order, with the colour each stage owns app-wide. */
 const BILLING_LEGEND = [
@@ -59,6 +78,44 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
 
   const toggleClient = (id: string) =>
     setHidden((h) => (h.includes(id) ? h.filter((x) => x !== id) : [...h, id]));
+
+  /**
+   * The invoice periods that fall inside the visible month.
+   *
+   * An invoice says which stretch of work it covers, and that stretch is worth
+   * seeing on the calendar — especially for an invoice with no hours behind it,
+   * where the days would otherwise look untouched.
+   */
+  const invoiceDays = useMemo(() => {
+    const map = new Map<string, InvoiceBand[]>();
+    const monthStart = `${monthPrefix}-01`;
+    const monthEnd = `${monthPrefix}-31`;
+
+    data.invoices.forEach((inv) => {
+      if (hidden.includes(inv.clientId)) return;
+      if (inv.periodEnd < monthStart || inv.periodStart > monthEnd) return;
+
+      const band: InvoiceBand = {
+        id: inv.id,
+        number: inv.number,
+        total: inv.total,
+        status: invoiceStatusComputed(inv),
+        client:
+          inv.clientName ??
+          data.clients.find((c) => c.id === inv.clientId)?.name ??
+          'Brez stranke',
+      };
+
+      let day = inv.periodStart < monthStart ? monthStart : inv.periodStart;
+      // Guarded by the month prefix rather than by counting: periods can be
+      // long, and only this month's days are drawn.
+      while (day <= inv.periodEnd && day.startsWith(monthPrefix)) {
+        map.set(day, [...(map.get(day) ?? []), band]);
+        day = addDaysIso(day, 1);
+      }
+    });
+    return map;
+  }, [data.invoices, data.clients, hidden, monthPrefix]);
 
   // Per-day totals for the visible month, honouring the client filter.
   const { days, monthHours, monthUnbilled, daysWorked, peakHours } = useMemo(() => {
@@ -265,6 +322,7 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
               }
               const iso = isoOf(new Date(year, month, day));
               const stat = days.get(iso);
+              const billed = invoiceDays.get(iso);
               const hasEntries = datesWithEntries.has(iso);
               const label = new Date(year, month, day).toLocaleDateString('sl-SI', {
                 weekday: 'long',
@@ -282,7 +340,7 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
                   tabIndex={day === Math.min(focusDay, daysInMonth) ? 0 : -1}
                   className={
                     'group relative flex min-h-16 cursor-pointer flex-col gap-1 rounded-md border p-1 text-left transition-all duration-100 hover:border-primary hover:bg-primary/12 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/15 desk:h-28 desk:p-2 ' +
-                    (stat
+                    (stat || billed
                       ? 'border-border bg-card shadow-xs'
                       : 'border-transparent bg-muted') +
                     (iso === today ? ' border-2 border-primary' : '')
@@ -294,7 +352,9 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
                         }${BILLING_LEGEND.filter((l) => stat[l.key] > 0)
                           .map((l) => `, ${fmtHours(stat[l.key])} ${l.label.toLowerCase()}`)
                           .join('')}`
-                      : `${label} — ni zabeleženih ur, dodajte vnos`
+                      : billed
+                        ? `${label} — na računu ${billed.map((b) => b.number).join(', ')}`
+                        : `${label} — ni zabeleženih ur, dodajte vnos`
                   }
                   onClick={() =>
                     hasEntries
@@ -380,9 +440,23 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
                     </span>
                   )}
 
+                  {/* The stretch an invoice covers, drawn along the foot of the
+                      day it covers. */}
+                  {billed && (
+                    <span
+                      className={
+                        'block h-1 shrink-0 rounded-sm ' +
+                        (stat ? 'mt-0.5' : 'mt-auto') +
+                        ' ' +
+                        INVOICE_BAND[billed[0]!.status]
+                      }
+                      aria-hidden="true"
+                    />
+                  )}
+
                   {/* Hover/focus card. Anchored away from the edge columns so it
                       can't run off the grid. */}
-                  {stat && (
+                  {(stat || billed) && (
                     <span
                       className={
                         'pointer-events-none invisible absolute top-full z-50 mt-1 hidden w-64 flex-col gap-2 rounded-2xl border border-border bg-card p-3 opacity-0 shadow-lg transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100 desk:flex ' +
@@ -392,12 +466,33 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
                     >
                       <span className="flex items-baseline justify-between gap-2 border-b border-border pb-2">
                         <span className="text-sm font-semibold">{label}</span>
-                        <span className="font-mono text-xs text-muted-fg">
-                          {fmtHours(stat.hours)}
-                        </span>
+                        {stat && (
+                          <span className="font-mono text-xs text-muted-fg">
+                            {fmtHours(stat.hours)}
+                          </span>
+                        )}
                       </span>
+
+                      {/* Which invoice this day is covered by, if any. */}
+                      {billed?.map((b) => (
+                        <span
+                          key={b.id}
+                          className="flex items-baseline justify-between gap-2 text-xs"
+                        >
+                          <span className="flex min-w-0 items-baseline gap-1.5">
+                            <span
+                              className={`size-2 shrink-0 rounded-full ${INVOICE_BAND[b.status]}`}
+                            />
+                            <span className="truncate font-medium">Račun {b.number}</span>
+                          </span>
+                          <span className="whitespace-nowrap font-mono text-2xs text-muted-fg">
+                            {fmtMoney(b.total)}
+                          </span>
+                        </span>
+                      ))}
+
                       <span className="flex max-h-52 flex-col gap-1.5 overflow-y-auto">
-                        {stat.list.map((e) => (
+                        {stat?.list.map((e) => (
                           <span key={e.id} className="flex items-start gap-2 text-xs">
                             <span
                               className={`mt-1 size-2 shrink-0 rounded-full ${swatchFor(e.billing)}`}
