@@ -6,10 +6,12 @@ import {
   InvoiceIcon,
   ListIcon,
   LockIcon,
+  TableIcon,
   PlusIcon,
   RepeatIcon,
   TrashIcon,
 } from '../components/icons';
+import { DataTable, type Column } from '../components/DataTable';
 import { EmptyState, SectionHead } from '../components/ui';
 import {
   clientColor,
@@ -33,11 +35,15 @@ import { BILLING_LABEL, sessionBillingLabel } from '../lib/invoice';
 import { btn, btnSm, cardLabel, chip, iconBtn, rowActions, tabSeg } from '../styles/cx';
 import type { Session } from '../lib/types';
 import { useStore } from '../store/context';
+import { useViewMode } from '../lib/viewMode';
 import { CalendarView } from './CalendarView';
 
 export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
   const { data, createSession, removeSession, toast } = useStore();
-  const [view, setView] = useState<'list' | 'calendar'>('list');
+  const [view, setView] = useViewMode<'list' | 'calendar' | 'table'>(
+    'reckon.view.hours',
+    'list',
+  );
   const [filter, setFilter] = useState<string>('all');
 
   const clientName = (id: string) =>
@@ -130,6 +136,143 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
     })();
   };
 
+  /*
+   * The same entries as the list, read across: the table is where a month of
+   * days becomes a column of hours that can be added up by eye, and where
+   * sorting by client or by status answers a question the grouped list cannot.
+   * The note only appears where there is room for it.
+   */
+  const entryColumns: Column<Session>[] = [
+    {
+      key: 'date',
+      header: 'Datum',
+      sortBy: (s) => s.date,
+      cell: (s) => <span className="font-mono text-xs">{fmtDMY(s.date)}</span>,
+    },
+    {
+      key: 'client',
+      header: 'Stranka',
+      sortBy: (s) => clientName(s.clientId),
+      cell: (s) => (
+        <span className="block max-w-40 truncate font-medium">
+          {clientName(s.clientId)}
+        </span>
+      ),
+    },
+    {
+      key: 'time',
+      header: 'Čas',
+      sortBy: (s) => s.start,
+      cell: (s) => (
+        <span className="font-mono text-xs whitespace-nowrap">
+          {s.start}–{s.end}
+        </span>
+      ),
+    },
+    {
+      key: 'hours',
+      header: 'Ure',
+      align: 'right',
+      sortBy: (s) => hoursBetween(s.start, s.end),
+      cell: (s) => (
+        <span className="font-mono font-semibold tabular-nums">
+          {fmtHours(hoursBetween(s.start, s.end))}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortBy: (s) => sessionBillingLabel(s, data.invoices) ?? 'unbilled',
+      cell: (s) => {
+        const billing = sessionBillingLabel(s, data.invoices);
+        // The same three colours the calendar legend uses, so the stages read
+        // the same wherever they are met.
+        const dot =
+          billing === 'paid'
+            ? 'bg-secondary'
+            : billing === 'invoiced'
+              ? 'bg-primary'
+              : 'bg-accent';
+        return (
+          // The labels are written for mid-sentence use in the list; here they
+          // start a column, so the first letter is lifted in CSS rather than
+          // keeping a second set of strings.
+          <span className="flex items-center gap-1.5 whitespace-nowrap text-xs capitalize text-muted-fg">
+            <span className={`size-1.5 shrink-0 rounded-full ${dot}`} />
+            {billing ? BILLING_LABEL[billing] : 'neobračunano'}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'note',
+      header: 'Opomba',
+      deskOnly: true,
+      sortBy: (s) => s.note,
+      cell: (s) => (
+        <span className="block max-w-56 truncate text-xs text-muted-fg">
+          {s.note || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      cell: (s) => {
+        // Hours on an invoice are frozen, here as everywhere else.
+        if (s.invoiced) {
+          return (
+            <span className="flex justify-end text-muted-fg" title="Na računu">
+              <LockIcon className="size-3.5" />
+            </span>
+          );
+        }
+        return (
+          <span className="flex justify-end gap-1.5">
+            <span
+              className={`${iconBtn} size-7`}
+              role="button"
+              tabIndex={0}
+              aria-label="Uredi vnos"
+              onClick={(e) => {
+                e.stopPropagation();
+                openSheet({ kind: 'entry', editing: s });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  openSheet({ kind: 'entry', editing: s });
+                }
+              }}
+            >
+              <EditIcon className="size-3.5" />
+            </span>
+            <span
+              className={`${iconBtn} size-7`}
+              role="button"
+              tabIndex={0}
+              aria-label="Izbriši vnos"
+              onClick={(e) => {
+                e.stopPropagation();
+                void deleteEntry(s.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  void deleteEntry(s.id);
+                }
+              }}
+            >
+              <TrashIcon className="size-3.5" />
+            </span>
+          </span>
+        );
+      },
+    },
+  ];
+
   return (
     <>
       <SectionHead
@@ -175,6 +318,13 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
         >
           <ListIcon className="size-3.5" />
           Seznam
+        </button>
+        <button
+          className={tabSeg(view === 'table')}
+          onClick={() => setView('table')}
+        >
+          <TableIcon className="size-3.5" />
+          Tabela
         </button>
         <button
           className={tabSeg(view === 'calendar')}
@@ -296,6 +446,42 @@ export function TrackView({ openSheet }: { openSheet: OpenSheet }) {
                 );
               })}
             </>
+          )}
+        </>
+      ) : view === 'table' ? (
+        <>
+          <div className="mb-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+            <button
+              className={chip(activeFilter === 'all')}
+              onClick={() => setFilter('all')}
+            >
+              Vse
+            </button>
+            {data.clients.map((c) => (
+              <button
+                key={c.id}
+                className={chip(activeFilter === c.id)}
+                onClick={() => setFilter(c.id)}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+
+          {visible.length === 0 ? (
+            <EmptyState
+              icon={<ClockIcon className="size-8" />}
+              lines={['Ni zabeleženih ur.', 'Dodajte prvi vnos z gumbom +.']}
+            />
+          ) : (
+            <DataTable
+              columns={entryColumns}
+              rows={visible}
+              rowKey={(s) => s.id}
+              onRowClick={(s) => openSheet({ kind: 'entry', editing: s })}
+              rowLabel={(s) => `${fmtDMY(s.date)} ${s.start}–${s.end}`}
+              dimmed={(s) => s.invoiced}
+            />
           )}
         </>
       ) : (

@@ -5,8 +5,10 @@ import {
   ListIcon,
   PlusIcon,
   RepeatIcon,
+  TableIcon,
 } from '../components/icons';
 import { invoiceReadiness } from '@reckon/shared';
+import { DataTable, type Column } from '../components/DataTable';
 import { EmptyState, SectionHead } from '../components/ui';
 import { failureMessage } from '../lib/failure';
 import { fmtDMY, fmtMoney, plural, todayIso } from '../lib/format';
@@ -18,11 +20,14 @@ import {
   unpaidWarning,
 } from '../lib/invoice';
 import type { OpenSheet } from '../lib/sheets';
+import type { Invoice } from '../lib/types';
 import { useStore } from '../store/context';
-import { badge, btn, btnSm, btnXs } from '../styles/cx';
+import { useViewMode } from '../lib/viewMode';
+import { badge, btn, btnSm, btnXs, tabSeg } from '../styles/cx';
 
 export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
   const { data, setInvoicePaid, toast } = useStore();
+  const [view, setView] = useViewMode<'list' | 'table'>('reckon.view.invoices', 'list');
 
   const clientName = (id: string) =>
     data.clients.find((c) => c.id === id)?.name ?? 'Neznana stranka';
@@ -80,6 +85,135 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
             : 'vse plačano',
         ].join(' · ');
 
+  /*
+   * The table is the same ledger read across instead of down: one line per
+   * invoice, the money in a column that can be scanned, and the two things
+   * anyone does from a row — mark it paid, open its worksheet — still on it.
+   */
+  const columns: Column<Invoice>[] = [
+    {
+      key: 'number',
+      header: 'Št.',
+      sortBy: (inv) => invoiceSortKey(inv),
+      cell: (inv) => <span className="font-mono text-xs">{inv.number}</span>,
+    },
+    {
+      key: 'client',
+      header: 'Stranka',
+      sortBy: (inv) => clientName(inv.clientId),
+      cell: (inv) => (
+        <span className="block max-w-48 truncate font-medium">
+          {clientName(inv.clientId)}
+        </span>
+      ),
+    },
+    {
+      key: 'issued',
+      header: 'Izdan',
+      sortBy: (inv) => inv.issueDate,
+      cell: (inv) => <span className="font-mono text-xs">{fmtDMY(inv.issueDate)}</span>,
+    },
+    {
+      key: 'due',
+      header: 'Rok',
+      deskOnly: true,
+      sortBy: (inv) => inv.dueDate,
+      cell: (inv) => <span className="font-mono text-xs">{fmtDMY(inv.dueDate)}</span>,
+    },
+    {
+      key: 'period',
+      header: 'Obdobje',
+      deskOnly: true,
+      sortBy: (inv) => inv.periodStart,
+      cell: (inv) => (
+        <span className="font-mono text-2xs text-muted-fg">
+          {fmtDMY(inv.periodStart)} – {fmtDMY(inv.periodEnd)}
+        </span>
+      ),
+    },
+    {
+      key: 'total',
+      header: 'Znesek',
+      align: 'right',
+      sortBy: (inv) => inv.total,
+      cell: (inv) => (
+        <span className="font-mono font-semibold tabular-nums">{fmtMoney(inv.total)}</span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortBy: (inv) => STATUS_LABEL[invoiceStatusComputed(inv)],
+      cell: (inv) => {
+        const status = invoiceStatusComputed(inv);
+        return <span className={badge[STATUS_BADGE[status]]}>{STATUS_LABEL[status]}</span>;
+      },
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      cell: (inv) => {
+        const status = invoiceStatusComputed(inv);
+        return (
+          <span className="flex justify-end gap-1.5">
+            <span
+              className={`${status === 'paid' ? btn.ghost : btn.outline} ${btnXs}`}
+              role="button"
+              tabIndex={0}
+              aria-label={
+                status === 'paid'
+                  ? `Prekliči plačilo računa ${inv.number}`
+                  : `Označi račun ${inv.number} kot plačan`
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePaid(inv.id, status !== 'paid');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  togglePaid(inv.id, status !== 'paid');
+                }
+              }}
+            >
+              {status === 'paid' ? (
+                <>
+                  <RepeatIcon className="size-3" />
+                  Prekliči
+                </>
+              ) : (
+                <>
+                  <CheckCircleIcon className="size-3" />
+                  Plačano
+                </>
+              )}
+            </span>
+            <span
+              className={`${btn.outline} ${btnXs}`}
+              role="button"
+              tabIndex={0}
+              aria-label={`Delovni list računa ${inv.number}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                openSheet({ kind: 'timesheet', id: inv.id });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  openSheet({ kind: 'timesheet', id: inv.id });
+                }
+              }}
+            >
+              <ListIcon className="size-3" />
+              Ure
+            </span>
+          </span>
+        );
+      },
+    },
+  ];
+
   return (
     <>
       <SectionHead title="Računi" meta={headerMeta}>
@@ -135,6 +269,19 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
         </div>
       )}
 
+      {data.invoices.length > 0 && (
+        <div className="mb-3 flex gap-0.5 rounded-lg bg-muted p-1">
+          <button className={tabSeg(view === 'list')} onClick={() => setView('list')}>
+            <ListIcon className="size-3.5" />
+            Seznam
+          </button>
+          <button className={tabSeg(view === 'table')} onClick={() => setView('table')}>
+            <TableIcon className="size-3.5" />
+            Tabela
+          </button>
+        </div>
+      )}
+
       {data.invoices.length === 0 ? (
         <EmptyState
           icon={<InvoiceIcon className="size-8" />}
@@ -142,6 +289,15 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
             'Ni izstavljenih računov.',
             'Zabeležene ure zaračunate z enim klikom.',
           ]}
+        />
+      ) : view === 'table' ? (
+        <DataTable
+          columns={columns}
+          rows={sorted}
+          rowKey={(inv) => inv.id}
+          onRowClick={(inv) => openSheet({ kind: 'viewInvoice', id: inv.id })}
+          rowLabel={(inv) => `Odpri račun ${inv.number}`}
+          dimmed={(inv) => invoiceStatusComputed(inv) === 'paid'}
         />
       ) : (
         sorted.map((inv) => {
