@@ -13,16 +13,33 @@ const PAD = { top: 12, right: 12, bottom: 22, left: 52 };
 
 const dayNumber = (iso: string) => Math.floor(Date.parse(iso + 'T00:00:00Z') / 86_400_000);
 
-export function TrajectoryChart({ trajectory }: { trajectory: Trajectory }) {
+export function TrajectoryChart({
+  trajectory,
+  projection,
+  todayIso,
+}: {
+  trajectory: Trajectory;
+  /** Where the year lands if the average month repeats. Absent for a past year. */
+  projection?: { projected: number; monthsRemaining: number } | null;
+  todayIso: string;
+}) {
   const [hover, setHover] = useState<{ x: number; point: TrajectoryPoint } | null>(null);
 
   const x0 = dayNumber(trajectory.yearStart);
   const x1 = dayNumber(trajectory.yearEnd);
   const span = Math.max(1, x1 - x0);
 
+  // A forecast is only worth drawing while the year still has months in it.
+  const forecast =
+    projection && projection.monthsRemaining > 0 && todayIso <= trajectory.yearEnd
+      ? projection
+      : null;
+
   const everything = [...trajectory.paidSeries, ...trajectory.invoicedSeries];
   const peak = Math.max(
     ...everything.map((p) => p.cumulativeRevenue),
+    // The forecast sets the ceiling when it runs above what has happened.
+    forecast?.projected ?? 0,
     // A threshold only belongs on the axis once it is within reach; otherwise
     // a quiet year would be drawn as a flat line along the bottom.
     ...trajectory.thresholds
@@ -51,6 +68,8 @@ export function TrajectoryChart({ trajectory }: { trajectory: Trajectory }) {
   };
 
   const paidEnd = trajectory.paidSeries.at(-1)?.cumulativeRevenue ?? 0;
+  // The forecast continues from everything already on the books, paid or not.
+  const committed = trajectory.invoicedSeries.at(-1)?.cumulativeRevenue ?? paidEnd;
 
   return (
     <div className="w-full overflow-x-auto">
@@ -115,6 +134,41 @@ export function TrajectoryChart({ trajectory }: { trajectory: Trajectory }) {
           strokeWidth={2}
           strokeDasharray="5 4"
         />
+        {/*
+          Where the year is heading, drawn faintest of the three: received is
+          fact, issued is nearly fact, and this is arithmetic about months that
+          have not happened.
+        */}
+        {forecast && (
+          <>
+            <line
+              x1={px(todayIso < trajectory.yearStart ? trajectory.yearStart : todayIso)}
+              y1={py(committed)}
+              x2={px(trajectory.yearEnd)}
+              y2={py(forecast.projected)}
+              className="stroke-primary"
+              strokeWidth={1.5}
+              strokeDasharray="2 3"
+              opacity={0.65}
+            />
+            <circle
+              cx={px(trajectory.yearEnd)}
+              cy={py(forecast.projected)}
+              r={3}
+              className="fill-primary"
+              opacity={0.65}
+            />
+            <text
+              x={px(trajectory.yearEnd)}
+              y={py(forecast.projected) - 7}
+              textAnchor="end"
+              className="fill-muted-fg font-mono text-[9px]"
+            >
+              ~{fmtMoney(forecast.projected)}
+            </text>
+          </>
+        )}
+
         {/* money actually received */}
         <path
           d={steps(trajectory.paidSeries, 0)}
@@ -167,6 +221,12 @@ export function TrajectoryChart({ trajectory }: { trajectory: Trajectory }) {
           <span className="h-0.5 w-4 border-t-2 border-dashed border-accent" /> Izdano, še
           neplačano
         </span>
+        {forecast && (
+          <span className="flex items-center gap-1.5">
+            <span className="h-0.5 w-4 border-t-2 border-dotted border-primary opacity-70" />{' '}
+            Napoved
+          </span>
+        )}
         <span className="flex items-center gap-1.5">
           <span className="h-0.5 w-4 border-t border-dashed border-destructive" /> Prag
         </span>

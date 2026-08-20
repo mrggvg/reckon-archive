@@ -5,6 +5,7 @@ import {
   EditIcon,
   InvoiceIcon,
   ListIcon,
+  LockIcon,
   PlusIcon,
   RepeatIcon,
   TrashIcon,
@@ -318,6 +319,18 @@ export function PunchRow({
   const { data } = useStore();
   const dur = hoursBetween(session.start, session.end);
   const billing = sessionBillingLabel(session, data.invoices);
+  /*
+   * Hours that have reached an invoice are part of a document that has left the
+   * building, and the server refuses to change them. Offering a pencil that can
+   * only fail is worse than not offering one: the lock says why up front, and
+   * names the invoice to look at instead.
+   */
+  const onInvoice = data.invoices.find((i) => i.id === session.invoiceId);
+  const lockLabel = onInvoice
+    ? `Na računu ${onInvoice.number}${
+        onInvoice.status === 'paid' ? ' — plačano' : ''
+      }; ur ni več mogoče spreminjati`
+    : 'Vnos je na računu; ur ni več mogoče spreminjati';
   return (
     <div
       className={
@@ -355,20 +368,33 @@ export function PunchRow({
         {session.end}
       </div>
       <div className={rowActions}>
-        <button
-          className={`${iconBtn} size-7`}
-          onClick={onEdit}
-          aria-label="Uredi vnos"
-        >
-          <EditIcon className="size-3.5" />
-        </button>
-        <button
-          className={`${iconBtn} size-7`}
-          onClick={onDelete}
-          aria-label="Izbriši vnos"
-        >
-          <TrashIcon className="size-3.5" />
-        </button>
+        {session.invoiced ? (
+          <span
+            className="flex size-7 items-center justify-center text-muted-fg"
+            title={lockLabel}
+            aria-label={lockLabel}
+            role="img"
+          >
+            <LockIcon className="size-3.5" />
+          </span>
+        ) : (
+          <>
+            <button
+              className={`${iconBtn} size-7`}
+              onClick={onEdit}
+              aria-label="Uredi vnos"
+            >
+              <EditIcon className="size-3.5" />
+            </button>
+            <button
+              className={`${iconBtn} size-7`}
+              onClick={onDelete}
+              aria-label="Izbriši vnos"
+            >
+              <TrashIcon className="size-3.5" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

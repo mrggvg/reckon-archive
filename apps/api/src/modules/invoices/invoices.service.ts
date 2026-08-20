@@ -91,6 +91,9 @@ export const invoicesService = {
           city: client.city,
         }),
         clientTaxNumber: client.tax_number,
+        // Hours were logged for this, so the work was this taxpayer's own.
+        passthroughFor: '',
+        passthroughKeepCents: null,
       });
 
       await sessionsRepo.attachToInvoice(
@@ -99,10 +102,6 @@ export const invoicesService = {
         row.id,
         sessions.map((s) => s.id),
       );
-
-      // The number is spent now, whatever happens to this invoice later.
-      const issued = parseInvoiceNumber(row.number);
-      if (issued) await profileRepo.advanceNextNumber(tx, userId, issued);
 
       return toInvoiceDto(row, sessions.map((s) => s.id));
     });
@@ -142,10 +141,12 @@ export const invoicesService = {
           city: client.city,
         }),
         clientTaxNumber: client.tax_number,
+        passthroughFor: input.passthrough?.forWhom ?? '',
+        passthroughKeepCents:
+          input.passthrough === null || input.passthrough === undefined
+            ? null
+            : toCents(input.passthrough.keep),
       });
-
-      const issued = parseInvoiceNumber(row.number);
-      if (issued) await profileRepo.advanceNextNumber(tx, userId, issued);
 
       return toInvoiceDto(row, []);
     });
@@ -185,10 +186,12 @@ export const invoicesService = {
             city: client.city,
           }),
           clientTaxNumber: client.tax_number,
+          passthroughFor: input.passthrough?.forWhom ?? '',
+          passthroughKeepCents:
+            input.passthrough === null || input.passthrough === undefined
+              ? null
+              : toCents(input.passthrough.keep),
         });
-        // An imported number is spent too: a generated invoice must never be
-        // handed a number that has already been on a document.
-        await profileRepo.advanceNextNumber(tx, userId, parsed);
         return inserted;
       });
       return toInvoiceDto(row, []);
@@ -230,7 +233,13 @@ export const invoicesService = {
     const linkedSessions = (await sessionsRepo.idsByInvoice(userId)).get(id) ?? [];
 
     if (linkedSessions.length > 0) {
-      const refused = ['clientId', 'periodStart', 'periodEnd', 'total'] as const;
+      const refused = [
+        'clientId',
+        'periodStart',
+        'periodEnd',
+        'total',
+        'passthrough',
+      ] as const;
       if (refused.some((k) => input[k] !== undefined)) {
         throw new ConflictError(
           'Stranke, obdobja in zneska računa iz ur ni mogoče spremeniti — izhajajo iz vnesenih ur',
@@ -252,6 +261,11 @@ export const invoicesService = {
       if (input.periodStart !== undefined) patch.period_start = input.periodStart;
       if (input.periodEnd !== undefined) patch.period_end = input.periodEnd;
       if (input.total !== undefined) patch.total_cents = toCents(input.total);
+      if (input.passthrough !== undefined) {
+        patch.passthrough_for = input.passthrough?.forWhom ?? '';
+        patch.passthrough_keep_cents =
+          input.passthrough === null ? null : toCents(input.passthrough.keep);
+      }
     }
 
     const issue = (patch.issue_date as string) ?? existing.issue_date;

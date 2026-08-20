@@ -1,4 +1,5 @@
 import {
+  forecastYear,
   fromCents,
   incomeTax,
   monthlyContributions,
@@ -6,6 +7,7 @@ import {
   revenueThresholds,
   taxYearConfig,
   toCents,
+  yearSpan,
   type NormiranecKind,
 } from '@reckon/shared';
 import { NotFoundError } from '../../lib/AppError.js';
@@ -117,6 +119,23 @@ function contributionDto(row: ContributionRow) {
   };
 }
 
+/**
+ * The gap between what was expected and what was actually paid.
+ *
+ * Only meaningful once a month has been settled — a partly paid month is
+ * short, not wrong. A cent either way is rounding; anything more is worth
+ * asking about.
+ */
+function mismatchFor(
+  expected: number,
+  state: { paid: number; groups: Record<string, boolean> },
+): { expected: number; paid: number; difference: number } | null {
+  const complete = Object.values(state.groups).every(Boolean);
+  if (!complete || state.paid === 0) return null;
+  const difference = Math.round((state.paid - expected) * 100) / 100;
+  return Math.abs(difference) < 0.02 ? null : { expected, paid: state.paid, difference };
+}
+
 export const taxService = {
   /**
    * A month of contributions: the filed figures if they exist, otherwise what
@@ -222,7 +241,13 @@ export const taxService = {
     for (let month = firstMonth; month <= 12; month++) {
       const row = filed.get(month);
       if (row) {
-        months.push({ ...contributionDto(row), estimated: false, settled: settled(month) });
+        const state = settled(month);
+        months.push({
+          ...contributionDto(row),
+          estimated: false,
+          settled: state,
+          mismatch: mismatchFor(fromCents(row.total_cents), state),
+        });
         continue;
       }
       // Only a filed month can be shown for a popoldanski s.p.; the estimate
@@ -252,6 +277,12 @@ export const taxService = {
         },
         payment: estimatedPayment(profile.accounts),
         settled: settled(month),
+        /*
+         * Paying something other than the estimate is the app finding out it
+         * was wrong. The real figure comes from FURS, and the difference is
+         * the signal to correct the inputs the estimate was built on.
+         */
+        mismatch: mismatchFor(fromCents(computed.total), settled(month)),
       });
     }
     return months;
@@ -429,6 +460,38 @@ export const taxService = {
               monthsCovered: 13 - monthOf(profile.startIso),
             }
           : null,
+      /**
+       * Where the year lands if the average month repeats.
+       *
+       * The floor — received plus issued — assumes no further work, which is
+       * only true in December. Anything decided against that floor (what a
+       * favour costs, how close 60.000 is) is decided against a number that is
+       * too low, so the projection is what those questions are asked with.
+       */
+      projection: (() => {
+        const span = yearSpan({
+          year,
+          todayIso: new Date().toISOString().slice(0, 10),
+          startIso: profile.startIso,
+        });
+        const f = forecastYear({
+          receivedCents: ytdCents,
+          outstandingCents,
+          monthsTraded: span.monthsTraded,
+          monthsRemaining: span.monthsRemaining,
+        });
+        return {
+          received: fromCents(f.receivedCents),
+          outstanding: fromCents(f.outstandingCents),
+          committed: fromCents(f.committedCents),
+          monthlyAverage: fromCents(f.monthlyAverageCents),
+          monthsTraded: f.monthsTraded,
+          monthsRemaining: f.monthsRemaining,
+          projected: fromCents(f.projectedCents),
+          /** Tax the year would owe if it lands there. */
+          projectedTax: fromCents(incomeTax(f.projectedCents, profile.kind, year).taxCents),
+        };
+      })(),
       assessment: await taxRepo.assessment(userId, year).then((a) =>
         a
           ? {

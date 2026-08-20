@@ -17,6 +17,10 @@ export {
 } from './profile.js';
 export type { ProfileInput } from './profile.js';
 export { invoiceReadiness } from './readiness.js';
+export { forecastYear, yearSpan } from './forecast.js';
+export type { YearForecast } from './forecast.js';
+export { passthroughOutcome, keepFromRate } from './passthrough.js';
+export type { PassthroughOutcome } from './passthrough.js';
 export {
   taxYearConfig,
   isProjectedYear,

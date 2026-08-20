@@ -68,6 +68,21 @@ export const invoiceGenerateSchema = z
 export type InvoiceGenerateInput = z.infer<typeof invoiceGenerateSchema>;
 
 /**
+ * An invoice raised on somebody else's behalf.
+ *
+ * `keep` is what stays here; the rest is handed over. Stored as an amount
+ * rather than a percentage because the amount is what actually happened —
+ * the percentage is only how it gets typed. Null means an ordinary invoice.
+ */
+const passthrough = z
+  .object({
+    forWhom: z.string().trim().min(1, 'Za koga je ta račun?').max(80),
+    keep: z.number().nonnegative('Zadržani znesek ne more biti negativen'),
+  })
+  .nullable()
+  .default(null);
+
+/**
  * An invoice the app issues without any hours behind it.
  *
  * Not every job is billed by the clock — a fixed fee, a retainer, a call-out.
@@ -83,6 +98,7 @@ export const invoiceManualSchema = z
     periodStart: isoDate,
     periodEnd: isoDate,
     total: z.number().positive('Znesek mora biti večji od 0'),
+    passthrough,
   })
   .refine((v) => v.dueDate >= v.issueDate, {
     path: ['dueDate'],
@@ -91,6 +107,10 @@ export const invoiceManualSchema = z
   .refine((v) => v.periodEnd >= v.periodStart, {
     path: ['periodEnd'],
     message: 'Konec obdobja ne more biti pred začetkom',
+  })
+  .refine((v) => v.passthrough === null || v.passthrough.keep <= v.total, {
+    path: ['passthrough', 'keep'],
+    message: 'Zadržani znesek ne more presegati zneska računa',
   });
 
 export type InvoiceManualInput = z.infer<typeof invoiceManualSchema>;
@@ -111,6 +131,7 @@ export const invoiceImportSchema = z
     total: z.number().nonnegative('Znesek ne more biti negativen'),
     status: z.enum(['unpaid', 'paid']),
     paidDate: isoDate.nullable(),
+    passthrough,
   })
   .refine((v) => v.dueDate >= v.issueDate, {
     path: ['dueDate'],
@@ -123,6 +144,10 @@ export const invoiceImportSchema = z
   .refine((v) => (v.status === 'paid') === (v.paidDate !== null), {
     path: ['paidDate'],
     message: 'Plačan račun potrebuje datum plačila',
+  })
+  .refine((v) => v.passthrough === null || v.passthrough.keep <= v.total, {
+    path: ['passthrough', 'keep'],
+    message: 'Zadržani znesek ne more presegati zneska računa',
   });
 
 export type InvoiceImportInput = z.infer<typeof invoiceImportSchema>;
@@ -147,6 +172,15 @@ export const invoiceEditSchema = z.object({
   periodStart: isoDate.optional(),
   periodEnd: isoDate.optional(),
   total: z.number().nonnegative().optional(),
+  // Optional here in the "may be absent" sense: absent leaves it alone, null
+  // clears it, an object sets it.
+  passthrough: z
+    .object({
+      forWhom: z.string().trim().min(1).max(80),
+      keep: z.number().nonnegative(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export type InvoiceEditInput = z.infer<typeof invoiceEditSchema>;

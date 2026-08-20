@@ -57,7 +57,10 @@ export const resources = {
     lastPaymentDetails: () =>
       api<ContributionMonth['payment']>('/api/tax/contributions/last-payment-details'),
     fileContribution: (input: unknown) =>
-      api<{ id: string }>('/api/tax/contributions', { method: 'POST', ...json(input) }),
+      api<{
+        id: string;
+        baseUpdated: { from: number; to: number } | null;
+      }>('/api/tax/contributions', { method: 'POST', ...json(input) }),
     deleteContribution: (id: string) =>
       api<void>(`/api/tax/contributions/${id}`, { method: 'DELETE' }),
     payments: (year: number) => api<TaxPayment[]>(`/api/tax/payments?year=${year}`),

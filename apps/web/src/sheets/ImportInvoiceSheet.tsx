@@ -8,7 +8,10 @@ import { useStore } from '../store/context';
 import { btn, btnBlock, hint, input, row2 } from '../styles/cx';
 import { Select } from '../components/Select';
 import { DateField } from '../components/DateField';
+import { PassthroughFields } from '../components/PassthroughFields';
+import { yearPositionFrom } from '../lib/yearPosition';
 import { failureMessage } from '../lib/failure';
+import { todayIso } from '../lib/format';
 import type { OpenSheet } from '../lib/sheets';
 
 export function ImportInvoiceSheet({
@@ -32,6 +35,9 @@ export function ImportInvoiceSheet({
   const [dueDate, setDueDate] = useState('');
   const [status, setStatus] = useState<'unpaid' | 'paid'>('unpaid');
   const [paidDate, setPaidDate] = useState('');
+  const [passthrough, setPassthrough] = useState<
+    { forWhom: string; keep: number } | null
+  >(null);
 
   const save = async () => {
     const totalNum = parseFloat(total);
@@ -58,6 +64,7 @@ export function ImportInvoiceSheet({
         total: totalNum,
         status,
         paidDate: status === 'paid' ? paidDate || issueDate : null,
+        passthrough: passthrough?.forWhom.trim() ? passthrough : null,
       });
       toast('Račun ' + invoice.number + ' dodan');
       onClose();
@@ -156,6 +163,19 @@ export function ImportInvoiceSheet({
           />
         </Field>
       </div>
+
+      <PassthroughFields
+        totalEuros={parseFloat(total) || 0}
+        value={passthrough}
+        onChange={setPassthrough}
+        year={Number(issueDate.slice(0, 4)) || Number(todayIso().slice(0, 4))}
+        kind="full"
+        position={yearPositionFrom(
+          data.invoices,
+          todayIso(),
+          data.profile.businessStartDate ?? null,
+        )}
+      />
 
       <Field label="Opis storitve" htmlFor="impDesc">
         <input

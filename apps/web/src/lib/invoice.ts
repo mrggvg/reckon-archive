@@ -1,4 +1,5 @@
-import { todayIso } from './format';
+import { nextInvoiceNumber as sharedNextNumber } from '@reckon/shared';
+import { fmtDMY, fmtMoney, todayIso } from './format';
 import type { Invoice, InvoiceStatus, Session } from './types';
 
 export function invoiceStatusComputed(inv: Invoice): InvoiceStatus {
@@ -7,33 +8,66 @@ export function invoiceStatusComputed(inv: Invoice): InvoiceStatus {
   return 'unpaid';
 }
 
-export function parseInvoiceNumber(
-  str: string | null | undefined,
-): { seq: number; year: number } | null {
-  const m = /^(\d+)\s*\/\s*(\d{4})$/.exec((str ?? '').trim());
-  if (!m) return null;
-  return { seq: parseInt(m[1] as string, 10), year: parseInt(m[2] as string, 10) };
-}
+export { parseInvoiceNumber } from '@reckon/shared';
 
+/**
+ * The number a new invoice would get, for anything that wants to say so before
+ * asking the server.
+ *
+ * The rule itself lives in @reckon/shared, and this only unwraps the ledger:
+ * two copies of it would sooner or later disagree about the same invoice.
+ */
 export function nextInvoiceNumber(
   invoices: Invoice[],
   declaredNext: string,
   issueDateIso: string,
 ): string {
-  const year = new Date(issueDateIso + 'T00:00:00').getFullYear();
-  let maxSeq = 0;
-  invoices.forEach((inv) => {
-    const parsed = parseInvoiceNumber(inv.number);
-    if (parsed && parsed.year === year) maxSeq = Math.max(maxSeq, parsed.seq);
-  });
-
-  // Whatever the profile declares is a floor: an s.p. that issued 001 and 002
-  // by hand starts the app's series at 003, not 001.
-  const declared = parseInvoiceNumber(declaredNext);
-  const floor = declared && declared.year === year ? declared.seq : 1;
-  return `${String(Math.max(maxSeq + 1, floor)).padStart(3, '0')}/${year}`;
+  return sharedNextNumber(
+    invoices.map((inv) => inv.number),
+    declaredNext,
+    issueDateIso,
+  );
 }
 
+
+/**
+ * The number the next invoice would get once this one is deleted.
+ *
+ * Asked of the same rule that issues numbers, against the ledger this invoice
+ * has been taken out of — so it is what will actually happen, not a guess about
+ * it. When the answer is this invoice's own number, deleting hands it back.
+ */
+export function numberAfterDelete(
+  invoices: Invoice[],
+  inv: Invoice,
+  declaredNext: string,
+): string {
+  return nextInvoiceNumber(
+    invoices.filter((i) => i.id !== inv.id),
+    declaredNext,
+    inv.issueDate,
+  );
+}
+
+
+/**
+ * What someone is agreeing to when they take a payment back.
+ *
+ * Marking an invoice paid is one tap, and so is undoing it — but undoing it is
+ * not symmetric. The payment date is what the tax module counts revenue on, so
+ * withdrawing it moves money out of a month that may already have been paid
+ * contributions and dohodnina against, and the sum reappears among the
+ * outstanding ones. Worth a sentence and a deliberate second tap.
+ */
+export function unpaidWarning(inv: Invoice, clientName: string): string {
+  const paidOn = inv.paidDate ? ` (plačano ${fmtDMY(inv.paidDate)})` : '';
+  return (
+    `Prekličem plačilo računa ${inv.number}${paidOn}?\n\n` +
+    `${fmtMoney(inv.total)} za ${clientName} se vrne med neplačane. ` +
+    'Davki in zaslužek tega zneska ne bodo več šteli na dan plačila, ' +
+    'zato preverite, ali se izračun za tisti mesec še ujema.'
+  );
+}
 
 /** NNN/YYYY -> sortable number. */
 export function invoiceSortKey(inv: Invoice): number {

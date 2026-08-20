@@ -5,7 +5,8 @@ import type { InvoiceRow } from '../../lib/mappers.js';
 const COLUMNS = `id, client_id, number, issue_date, due_date, description,
                  period_start, period_end, total_cents, total_minutes,
                  rate_cents, status, paid_on, imported,
-                 client_name, client_address, client_tax_number`;
+                 client_name, client_address, client_tax_number,
+                 passthrough_for, passthrough_keep_cents`;
 
 export interface InvoiceWrite {
   clientId: string;
@@ -24,6 +25,9 @@ export interface InvoiceWrite {
   clientName: string;
   clientAddress: string;
   clientTaxNumber: string;
+  /** Whose work it was, when the invoice was raised for somebody else. */
+  passthroughFor: string;
+  passthroughKeepCents: number | null;
 }
 
 export const invoicesRepo = {
@@ -67,14 +71,14 @@ export const invoicesRepo = {
          (user_id, client_id, number, issue_date, due_date, description,
           period_start, period_end, total_cents, total_minutes, rate_cents,
           status, paid_on, imported, client_name, client_address,
-          client_tax_number)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+          client_tax_number, passthrough_for, passthrough_keep_cents)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        RETURNING ${COLUMNS}`,
       [
         userId, i.clientId, i.number, i.issueDate, i.dueDate, i.description,
         i.periodStart, i.periodEnd, i.totalCents, i.totalMinutes, i.rateCents,
         i.status, i.paidOn, i.imported, i.clientName, i.clientAddress,
-        i.clientTaxNumber,
+        i.clientTaxNumber, i.passthroughFor, i.passthroughKeepCents,
       ],
     );
     return rows[0] as InvoiceRow;

@@ -15,6 +15,7 @@ import {
   STATUS_LABEL,
   invoiceSortKey,
   invoiceStatusComputed,
+  unpaidWarning,
 } from '../lib/invoice';
 import type { OpenSheet } from '../lib/sheets';
 import { useStore } from '../store/context';
@@ -41,6 +42,10 @@ export function InvoicesView({ openSheet }: { openSheet: OpenSheet }) {
    * Here it is a control on the row, with the reverse always one tap away.
    */
   const togglePaid = (id: string, paid: boolean) => {
+    const inv = data.invoices.find((i) => i.id === id);
+    // The row makes both directions one tap. Only one of them can be wrong in a
+    // way that is hard to notice, so only that one asks.
+    if (!paid && inv && !confirm(unpaidWarning(inv, clientName(inv.clientId)))) return;
     void setInvoicePaid(id, paid, paid ? todayIso() : null)
       .then(() =>
         toast(paid ? 'Označeno kot plačano' : 'Označeno kot neplačano'),

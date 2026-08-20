@@ -48,6 +48,26 @@ published worked example for a popoldanski s.p. (60.000 → 10.100) is a test.
 | Separate Earnings tab | A segment inside Davki | Two questions, one place to look: *Obveznosti* and *Zaslužek na uro*. A fifth tab for one screen is not simpler. |
 | `contribution_period.is_estimated` and `source` | `source` alone | They encoded the same fact twice. A row exists only when it was filed; everything else is computed on read. |
 
+## 2. What this module is, after the second pass
+
+Not a calculator that tells you what you owe — eDavki does that, for free, and
+with more authority than any estimate here can have. This is a **proposal and a
+ledger**:
+
+- **Prispevki** are *suggested* from the month it ends, weeks before FURS
+  states them, so a month can be paid the day money arrives. What you actually
+  paid is recorded against the month, and when the two disagree the app says so
+  and asks for the filing — because the difference means its inputs are stale.
+- **Dohodnina** is a *pacing suggestion*: what to send now to be square with
+  the revenue that has actually landed. It bands correctly past 60.000, so the
+  suggestion changes shape by itself if the year turns out bigger.
+- Neither figure is presented as authoritative. The filing wins, always, and
+  entering one corrects the insurance base every later estimate is built on.
+
+That inversion is what makes the estimates survivable: the base changes each
+March and is recalculated from the previous year's profit, and the app cannot
+know either — but it can notice that reality disagreed with it, and ask.
+
 ## 2a. Known gaps — read this before trusting a figure
 
 | Gap | Effect | Status |
@@ -55,8 +75,8 @@ published worked example for a popoldanski s.p. (60.000 → 10.100) is a test.
 | **Popoldanski s.p. contributions** | They pay a flat pavšal (≈113 €/month in 2026: PIZ 49,15 + ZZ 54,53 + DO 6,43), not a share of the insurance base. The full-time engine would have said ~651 €. | **Guarded.** No estimate is produced for `normiranecKind: 'part'`; the tab says so and asks for the filing. Not modelled. |
 | **Health contribution before March 2026** | The config's earliest entry is 39,36 from 1 March 2026. A month before that falls back to the same figure, which is too high — it was revised upward on that date. | Only affects a business that was already trading in Jan–Feb 2026. Correct it on the filing. |
 | **Years after 2026** | `TAX_YEARS` holds 2026 only; a later year silently uses those rates. | The tab states which year's figures were applied whenever they differ. A 2027 update is one edit to that table. |
-| **The insurance base changes on 1 March, not 1 January** | 1.521,62 € is the *minimum* base and holds from 1 March 2026 to 28 February 2027 — 60 % of the 2025 average wage. The profile stores one base and applies it to every month of a year, so the two months either side of a March revision are computed with the wrong one. | Not modelled. The same shape as the health contribution, which *is* dated. Worth making the base a dated list before March 2027. |
-| **The base stops being the minimum in year two** | From the second year the base is recalculated from the previous year's profit. Earn more than the minimum implies and the real base — and every contribution — rises above what the app estimates. | Not modelled and not knowable by the app. The base is a profile field precisely so it can be corrected when FURS recalculates it. |
+| **The insurance base changes on 1 March, not 1 January** | 1.521,62 € is the *minimum* base and holds from 1 March 2026 to 28 February 2027 — 60 % of the 2025 average wage. The profile stores one base and applies it to every month of a year, so the two months either side of a March revision are computed with the wrong one. | **Self-correcting.** A month paid at a different figure raises a mismatch, and recording that month's filing resets the base for every later estimate. Making the base a dated list would fix it in advance rather than after one month. |
+| **The base stops being the minimum in year two** | From the second year the base is recalculated from the previous year's profit. Earn more than the minimum implies and the real base — and every contribution — rises above what the app estimates. | **Self-correcting**, the same way: the first month paid at the new figure is flagged, and the filing corrects the base. |
 | **Losing normiranec status** | Exceeding the revenue ceiling (120.000 for a full s.p., judged on a two-year average) ends eligibility, and the tax model changes entirely. The engine keeps applying normiranec bands. | Not modelled. The 120.000 threshold is drawn on the chart, but as a rate boundary rather than an eligibility warning. |
 | **Closing an s.p.** | There is no closure date, so contributions keep being estimated forever once a start date exists. | Not modelled. |
 | **Month boundary** | The "which month is owed" calculation uses the server's clock, so for an hour after midnight on the 1st a server in UTC and a user in Ljubljana can disagree. | Cosmetic, self-corrects. |

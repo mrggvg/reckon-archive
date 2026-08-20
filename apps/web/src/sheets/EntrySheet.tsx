@@ -3,7 +3,7 @@ import { PlusIcon } from '../components/icons';
 import { Field, Sheet } from '../components/ui';
 import { failureMessage } from '../lib/failure';
 import { todayIso } from '../lib/format';
-import { lastShiftFor } from '../lib/suggestions';
+import { lastClientId, usualShift } from '../lib/suggestions';
 import type { EntryPrefill, OpenSheet } from '../lib/sheets';
 import type { Session } from '../lib/types';
 import { defaultClientId, selectableClients } from '../lib/clients';
@@ -27,17 +27,20 @@ export function EntrySheet({
   const { data, createSession, updateSession, toast } = useStore();
   const [saving, setSaving] = useState(false);
   const [clientId, setClientId] = useState(
-    editing?.clientId ?? prefill?.clientId ?? defaultClientId(data.clients),
+    editing?.clientId ??
+      prefill?.clientId ??
+      // Whoever was worked for last: the same answer as last time is right far
+      // more often than the first name alphabetically.
+      (lastClientId(data.sessions, data.clients) || defaultClientId(data.clients)),
   );
   const [date, setDate] = useState(editing?.date ?? prefill?.date ?? todayIso());
 
-  // A new entry opens on the shift this client was last worked. 09:00–17:00 is
-  // only a guess about someone's day; their own last entry is evidence.
-  const usual = lastShiftFor(data.sessions, clientId);
-  const [start, setStart] = useState(
-    editing?.start ?? prefill?.start ?? usual?.start ?? '09:00',
-  );
-  const [end, setEnd] = useState(editing?.end ?? prefill?.end ?? usual?.end ?? '17:00');
+  // A new entry opens on the shift last worked — this client's if they have
+  // one, otherwise whatever was logged last. A constant is a guess about
+  // someone's day; their own entries are evidence.
+  const usual = usualShift(data.sessions, clientId);
+  const [start, setStart] = useState(editing?.start ?? prefill?.start ?? usual.start);
+  const [end, setEnd] = useState(editing?.end ?? prefill?.end ?? usual.end);
   // Once the times have been typed they are the user's, and switching client
   // must not overwrite them.
   const [timesTouched, setTimesTouched] = useState(false);
@@ -45,9 +48,9 @@ export function EntrySheet({
   const pickClient = (id: string) => {
     setClientId(id);
     if (editing || timesTouched) return;
-    const shift = lastShiftFor(data.sessions, id);
-    setStart(shift?.start ?? '09:00');
-    setEnd(shift?.end ?? '17:00');
+    const shift = usualShift(data.sessions, id);
+    setStart(shift.start);
+    setEnd(shift.end);
   };
   const [note, setNote] = useState(editing?.note ?? prefill?.note ?? '');
 
@@ -70,6 +73,50 @@ export function EntrySheet({
       setSaving(false);
     }
   };
+
+  /*
+   * An entry that has reached an invoice is evidence for a document that has
+   * been sent, so the server will not change it. The form is not shown at all:
+   * a locked form invites work that cannot be saved. What it says instead is
+   * which invoice holds these hours and how to get at it.
+   */
+  if (editing?.invoiced) {
+    const onInvoice = data.invoices.find((i) => i.id === editing.invoiceId);
+    const client = data.clients.find((c) => c.id === editing.clientId);
+    return (
+      <Sheet
+        title="Vnos je na računu"
+        onClose={onClose}
+        footer={
+          onInvoice ? (
+            <button
+              className={`${btn.outline} ${btnBlock}`}
+              onClick={() => openSheet?.({ kind: 'viewInvoice', id: onInvoice.id })}
+            >
+              Odpri račun {onInvoice.number}
+            </button>
+          ) : undefined
+        }
+      >
+        <div className="mb-3 rounded-lg border border-border bg-muted p-3">
+          <div className="text-sm font-semibold">{client?.name ?? 'Brez stranke'}</div>
+          <div className="mt-0.5 font-mono text-xs text-muted-fg">
+            {editing.date} · {editing.start}–{editing.end}
+          </div>
+          {editing.note && <div className="mt-1 text-xs">{editing.note}</div>}
+        </div>
+        <p className={hint}>
+          {onInvoice
+            ? `Te ure so obračunane na računu ${onInvoice.number}${
+                onInvoice.status === 'paid' ? ', ki je plačan' : ''
+              }. Vnosa ni mogoče spreminjati ali brisati, ker se mora ujemati z izdanim dokumentom.`
+            : 'Te ure so že obračunane na računu, zato jih ni mogoče spreminjati ali brisati.'}
+          {' '}
+          Če je res napačen, izbrišite račun — ure se vrnejo med neobračunane.
+        </p>
+      </Sheet>
+    );
+  }
 
   if (data.clients.length === 0) {
     return (

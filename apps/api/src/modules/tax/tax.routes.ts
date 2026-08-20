@@ -111,6 +111,18 @@ taxRouter.post(
       zap_reference: pay.zap.reference,
     });
 
+    /*
+     * The filing is the authority on the insurance base, and the base is what
+     * every later estimate is built from. FURS revises it each March and
+     * recalculates it from the previous year's profit — neither of which the
+     * app can know — so when a filing disagrees with the profile, the filing
+     * wins and the profile is corrected.
+     */
+    const baseUpdated =
+      c.base > 0
+        ? await profileRepo.syncContributionBase(req.session.userId!, toCents(c.base))
+        : null;
+
     // First filing wins: from here on every estimate can be paid the same way.
     await profileRepo.learnContributionAccounts(req.session.userId!, {
       piz_iban: row.piz_iban,
@@ -123,7 +135,13 @@ taxRouter.post(
       zap_reference: row.zap_reference,
     });
 
-    res.status(201).json({ id: row.id, year: row.period_year, month: row.period_month });
+    res.status(201).json({
+      id: row.id,
+      year: row.period_year,
+      month: row.period_month,
+      /** Set when the filing corrected the profile's insurance base. */
+      baseUpdated,
+    });
   }),
 );
 

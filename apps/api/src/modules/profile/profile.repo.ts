@@ -1,11 +1,11 @@
 import type { PoolClient } from 'pg';
-import { formatInvoiceNumber, parseInvoiceNumber } from '@reckon/shared';
 import { pool } from '../../db/pool.js';
 import type { ProfileRow } from '../../lib/mappers.js';
 
 const COLUMNS = `full_name, street, postal_code, city, tax_number, reg_number,
                  iban, account_holder, vat_payer, default_description,
-                 next_invoice_number, place_of_issue, vat_clause`;
+                 next_invoice_number, place_of_issue, vat_clause,
+                 business_start_date`;
 
 export interface ContributionAccounts {
   piz_iban: string;
@@ -110,31 +110,6 @@ export const profileRepo = {
   },
 
   /**
-   * Moves the numbering floor past a number that has just been issued.
-   *
-   * Without this the series is derived from the invoices that still exist, so
-   * deleting the newest one hands its number to the next invoice — and if the
-   * deleted one had already been sent, two different documents are in the world
-   * under the same number. A high-water mark can only ever move forward.
-   */
-  async advanceNextNumber(
-    client: PoolClient,
-    userId: string,
-    issued: { seq: number; year: number },
-  ): Promise<void> {
-    const declared = await this.declaredNextNumber(client, userId);
-    const parsed = parseInvoiceNumber(declared);
-    const floor = parsed && parsed.year === issued.year ? parsed.seq : 0;
-    if (issued.seq + 1 <= floor) return;
-
-    await client.query(
-      `UPDATE profiles SET next_invoice_number = $2, updated_at = now()
-       WHERE user_id = $1`,
-      [userId, formatInvoiceNumber(issued.seq + 1, issued.year)],
-    );
-  },
-
-  /**
    * The issuer's tax position, which only the tax module reads.
    *
    * Kept apart from the invoice profile deliberately: these fields describe
@@ -222,6 +197,31 @@ export const profileRepo = {
         a.stv_iban, a.stv_reference, a.zap_iban, a.zap_reference,
       ],
     );
+  },
+
+  /**
+   * Points the insurance base at what a filing actually used.
+   *
+   * Returns what changed, so the interface can say it happened rather than
+   * silently altering a number the user typed.
+   */
+  async syncContributionBase(
+    userId: string,
+    baseCents: number,
+  ): Promise<{ from: number; to: number } | null> {
+    const { rows } = await pool.query<{ contribution_base_cents: number }>(
+      `SELECT contribution_base_cents FROM profiles WHERE user_id = $1`,
+      [userId],
+    );
+    const current = rows[0]?.contribution_base_cents;
+    if (current === undefined || current === baseCents) return null;
+
+    await pool.query(
+      `UPDATE profiles SET contribution_base_cents = $2, updated_at = now()
+       WHERE user_id = $1`,
+      [userId, baseCents],
+    );
+    return { from: current, to: baseCents };
   },
 
   /** Reads the numbering floor inside an open transaction. */

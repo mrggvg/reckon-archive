@@ -15,6 +15,8 @@ export interface Profile {
   nextInvoiceNumber: string;
   placeOfIssue: string;
   vatClause: string;
+  /** Read-only: set through the tax profile, carried here for convenience. */
+  businessStartDate?: string | null;
 }
 
 export interface Client {
@@ -69,6 +71,11 @@ export interface Invoice {
   clientName?: string;
   clientAddress?: string;
   clientTaxNumber?: string;
+  /**
+   * Raised on somebody else's behalf: the whole amount is revenue here, but
+   * only `keep` was earned here — the rest was handed over in cash.
+   */
+  passthrough?: { forWhom: string; keep: number; handOver: number } | null;
 }
 
 export interface AppData {
@@ -97,6 +104,11 @@ export interface ContributionMonth {
   payment: Record<'piz' | 'zzDo' | 'stv' | 'zap', { iban: string; reference: string }> | null;
   /** What has been paid against this month, per group. */
   settled: { paid: number; groups: Record<'piz' | 'zzDo' | 'stv' | 'zap', boolean> };
+  /**
+   * Set when a settled month was paid at something other than the figure the
+   * app expected — the app's cue that its inputs need correcting.
+   */
+  mismatch: { expected: number; paid: number; difference: number } | null;
 }
 
 export interface TaxSummary {
@@ -145,6 +157,17 @@ export interface TaxSummary {
     iban: string;
     reference: string;
   };
+  /** Where the year lands if the average month repeats, with its working. */
+  projection: {
+    received: number;
+    outstanding: number;
+    committed: number;
+    monthlyAverage: number;
+    monthsTraded: number;
+    monthsRemaining: number;
+    projected: number;
+    projectedTax: number;
+  };
   officialInstallment: { amount: number; frequency: 'monthly' | 'quarterly' | null } | null;
   partialYear: { businessStartDate: string; monthsCovered: number } | null;
   assessment: { assessed: number; receivedOn: string; note: string; paid: number; balance: number } | null;
@@ -184,7 +207,12 @@ export interface EarningsWindow {
   label: string;
   fromIso: string;
   toIso: string;
+  /** What was earned here — a pass-through counts only for its kept share. */
   gross: number;
+  /** Invoiced for others and handed on: taxed here, not earned here. */
+  carried: number;
+  /** Earned here without hours behind it — a fixed fee, a one-off. */
+  flat: number;
   contributions: number;
   dohodnina: number;
   net: number;
@@ -197,5 +225,13 @@ export interface Earnings {
   basis: 'payment' | 'service';
   today: string;
   windows: EarningsWindow[];
-  clients: { clientId: string; name: string; gross: number; hours: number; effectiveRate: number | null }[];
+  clients: {
+    clientId: string;
+    name: string;
+    gross: number;
+    /** The part of `gross` that was not charged by the hour. */
+    flat: number;
+    hours: number;
+    effectiveRate: number | null;
+  }[];
 }

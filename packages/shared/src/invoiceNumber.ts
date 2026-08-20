@@ -28,10 +28,16 @@ export function formatInvoiceNumber(seq: number, year: number): string {
 /**
  * The next number in the series for the year an invoice is issued in.
  *
- * `declaredNext` is the profile's "next invoice number", and acts as a floor:
- * an s.p. who issued 001 and 002 by hand before adopting the app starts its
- * series at 003, not at 001. Numbers already recorded push the series past that
- * floor, so importing an old invoice can never produce a duplicate.
+ * The ledger is the authority: one past the highest number recorded for that
+ * year. Nothing else is remembered, so deleting the newest invoice hands its
+ * number straight back to the next one — which is the point. The cost is real
+ * and is the user's to carry: if the deleted invoice had already gone out, two
+ * different documents end up under one number, so the app says so before it
+ * deletes anything.
+ *
+ * `declaredNext` is the profile's "next invoice number" and only opens the
+ * year: an s.p. who issued 001 and 002 by hand before adopting the app starts
+ * at 003. Once the year has an invoice in it, the ledger takes over.
  */
 export function nextInvoiceNumber(
   existingNumbers: string[],
@@ -44,10 +50,13 @@ export function nextInvoiceNumber(
     const parsed = parseInvoiceNumber(number);
     if (parsed && parsed.year === year) maxSeq = Math.max(maxSeq, parsed.seq);
   }
+  if (maxSeq > 0) return formatInvoiceNumber(maxSeq + 1, year);
 
   const declared = parseInvoiceNumber(declaredNext);
-  const floor = declared && declared.year === year ? declared.seq : 1;
-  return formatInvoiceNumber(Math.max(maxSeq + 1, floor), year);
+  return formatInvoiceNumber(
+    declared && declared.year === year ? declared.seq : 1,
+    year,
+  );
 }
 
 /** NNN/YYYY as a sortable integer, newest last. */

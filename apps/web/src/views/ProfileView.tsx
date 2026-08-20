@@ -615,10 +615,10 @@ export function ProfileView({ openSheet }: { openSheet: OpenSheet }) {
             />
           </Field>
           <Field
-            label="Naslednja številka računa"
+            label="Začetna številka računa"
             htmlFor="pNextInvoiceNumber"
             error={errors.nextInvoiceNumber}
-            hint="Številka, ki jo bo dobil naslednji račun."
+            hint="Uporabi se, dokler v letu ni nobenega računa. Naprej se številke nadaljujejo od zadnjega računa v evidenci."
           >
             <input
               id="pNextInvoiceNumber"

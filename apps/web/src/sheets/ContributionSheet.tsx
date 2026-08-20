@@ -75,14 +75,22 @@ export function ContributionSheet({
     }
     setSaving(true);
     try {
-      await resources.tax.fileContribution({
+      const saved = await resources.tax.fileContribution({
         year,
         month: Number(month),
         base: parseFloat(base) || 0,
         ...numbers,
         payment,
       });
-      toast('Obračun shranjen');
+      // The filing is the authority on the base; say so when it corrects it,
+      // rather than quietly changing a number the user typed elsewhere.
+      toast(
+        saved.baseUpdated
+          ? `Obračun shranjen — zavarovalna osnova posodobljena na ${(
+              saved.baseUpdated.to / 100
+            ).toFixed(2)} €`
+          : 'Obračun shranjen',
+      );
       onClose();
     } catch (err) {
       toast(failureMessage(err));

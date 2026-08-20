@@ -48,10 +48,10 @@ export function EarningsView() {
     data.clients.find((c) => c.id === clientId)?.rate ?? null;
 
   /**
-   * The rate is net earnings divided by hours worked, so without hours there
-   * is no rate — only revenue. That is a real state for someone who has been
-   * invoicing without logging time, and it deserves an explanation rather
-   * than a column of dashes.
+   * The rate is net earnings divided by the hours the money paid for, so
+   * without an invoice charged by the hour there is no rate — only revenue.
+   * That is a real state for someone billing fixed fees, and it deserves an
+   * explanation rather than a column of dashes.
    */
   const noHours = earnings.windows.every((w) => w.hours === 0);
 
@@ -88,12 +88,12 @@ export function EarningsView() {
         <div className="mb-4 flex items-start gap-3 rounded-2xl border border-border bg-info-bg p-4 text-info-fg">
           <ClockIcon className="mt-0.5 size-4 shrink-0" />
           <div className="min-w-0">
-            <strong className="block text-sm">Ni zabeleženih ur</strong>
+            <strong className="block text-sm">Ni računov z urami</strong>
             <p className="mt-0.5 mb-0 text-xs leading-normal">
-              Prihodek in obveznosti so znani, ura pa ne — zaslužek na uro se izračuna iz
-              zabeleženih ur, ne iz računov. Zabeležite ure v zavihku Ure, tudi za nazaj,
-              in številke se izpišejo same. Spodaj je medtem prikazano, koliko od
-              prihodka ostane po plačilu obveznosti.
+              Prihodek in obveznosti so znani, ura pa ne — zaslužek na uro se računa iz
+              ur, ki so obračunane na računih. Zabeležite ure v zavihku Ure in iz njih
+              izstavite račun, pa se številke izpišejo same. Spodaj je medtem prikazano,
+              koliko od prihodka ostane po plačilu obveznosti.
             </p>
           </div>
         </div>
@@ -145,9 +145,21 @@ export function EarningsView() {
                 <dd className="font-mono">−{fmtMoney(w.dohodnina)}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-muted-fg">Ure</dt>
+                <dt className="text-muted-fg">Obračunane ure</dt>
                 <dd className="font-mono">{fmtHours(w.hours)}</dd>
               </div>
+              {/*
+                Money that never passed through an hour: a fixed fee, a one-off,
+                a kept cut. It is in "Prejeto" and in the obligations, but it
+                cannot be divided by hours, so the rate above leaves it out and
+                this line says how much was left out.
+              */}
+              {w.flat > 0 && w.hours > 0 && (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-fg">Od tega brez ur</dt>
+                  <dd className="font-mono">{fmtMoney(w.flat)}</dd>
+                </div>
+              )}
             </dl>
 
             {w.net < 0 && (
@@ -184,6 +196,12 @@ export function EarningsView() {
                     <ClockIcon className="size-3" />
                     {c.hours > 0 ? `${fmtHours(c.hours)} · ` : 'brez ur · '}
                     {fmtMoney(c.gross)}
+                    {c.hours > 0 && c.flat > 0 && (
+                      <span className="truncate">
+                        {' · '}
+                        {fmtMoney(c.flat)} brez ur
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="shrink-0 text-right">

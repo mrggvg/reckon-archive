@@ -340,7 +340,15 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
                   tabIndex={day === Math.min(focusDay, daysInMonth) ? 0 : -1}
                   className={
                     'group relative flex min-h-16 cursor-pointer flex-col gap-1 rounded-md border p-1 text-left transition-all duration-100 hover:border-primary hover:bg-primary/12 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/15 desk:h-28 desk:p-2 ' +
-                    (stat || billed
+                    /*
+                      Only hours make a day look like a day. Being inside an
+                      invoice's period is not work: a cell marked for it reads as
+                      "worked and paid" when nothing was worked, whatever the
+                      mark. So a covered day with nothing logged is drawn exactly
+                      like any other empty day, and the invoice it belongs to is
+                      left to the hover card.
+                    */
+                    (stat
                       ? 'border-border bg-card shadow-xs'
                       : 'border-transparent bg-muted') +
                     (iso === today ? ' border-2 border-primary' : '')
@@ -440,19 +448,6 @@ export function CalendarView({ openSheet }: { openSheet: OpenSheet }) {
                     </span>
                   )}
 
-                  {/* The stretch an invoice covers, drawn along the foot of the
-                      day it covers. */}
-                  {billed && (
-                    <span
-                      className={
-                        'block h-1 shrink-0 rounded-sm ' +
-                        (stat ? 'mt-0.5' : 'mt-auto') +
-                        ' ' +
-                        INVOICE_BAND[billed[0]!.status]
-                      }
-                      aria-hidden="true"
-                    />
-                  )}
 
                   {/* Hover/focus card. Anchored away from the edge columns so it
                       can't run off the grid. */}

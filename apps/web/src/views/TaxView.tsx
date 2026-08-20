@@ -420,6 +420,34 @@ export function TaxView({ openSheet }: { openSheet: OpenSheet }) {
           )}
 
           {/*
+            Where the year is heading, which is what decides the rate on
+            everything still to come — including whether 60.000 is in play.
+          */}
+          {summary.projection.monthsRemaining > 0 &&
+            summary.projection.monthlyAverage > 0 && (
+              <p className="mt-3 border-t border-border pt-2 text-2xs leading-normal text-muted-fg">
+                Ob tem tempu boš leto končal pri{' '}
+                <strong className="text-fg">
+                  ~{fmtMoney(summary.projection.projected)}
+                </strong>{' '}
+                — davek ~{fmtMoney(summary.projection.projectedTax)}.{' '}
+                {fmtMoney(summary.projection.monthlyAverage)}/mesec ×{' '}
+                {summary.projection.monthsRemaining}{' '}
+                {summary.projection.monthsRemaining === 1 ? 'mesec' : 'mesece'} do konca
+                leta.
+                {summary.projection.projected > 60000 && (
+                  <>
+                    {' '}
+                    <strong className="text-warning-fg">
+                      Pri tem tempu greš čez 60.000 € — konec normiranih odhodkov in
+                      prag za DDV.
+                    </strong>
+                  </>
+                )}
+              </p>
+            )}
+
+          {/*
             Paying this while invoices are still out means paying it again as
             each one lands: the recommendation is only ever square with money
             that has arrived, and every later payment adds tax on top of it.
@@ -479,7 +507,11 @@ export function TaxView({ openSheet }: { openSheet: OpenSheet }) {
       {/* ── the year's shape ──────────────────────────────────────────────── */}
       <section className="mb-4 rounded-2xl border border-border bg-card p-4 shadow-xs desk:p-5">
         <div className={cardLabel}>Prihodki skozi leto</div>
-        <TrajectoryChart trajectory={trajectory} />
+        <TrajectoryChart
+          trajectory={trajectory}
+          projection={summary.projection}
+          todayIso={todayIso()}
+        />
         {trajectory.outstanding > 0 && (
           <p className="mt-3 text-xs leading-normal text-muted-fg">
             Razlika med črtama je <strong>{fmtMoney(trajectory.outstanding)}</strong> —
@@ -631,18 +663,45 @@ export function TaxView({ openSheet }: { openSheet: OpenSheet }) {
         <section className="mb-4 rounded-2xl border border-border bg-card p-4 shadow-xs desk:p-5">
           <div className={cardLabel}>Plačani prispevki</div>
           {settledMonths.map((m) => (
-            <div
-              key={m.month}
-              className="flex items-center justify-between gap-3 border-t border-border py-2.5 first:border-t-0"
-            >
-              <span className="flex min-w-0 items-center gap-2">
-                <CheckCircleIcon className="size-3.5 shrink-0 text-success-fg" />
-                <span className="truncate text-sm">{MONTH_NAMES[m.month - 1]}</span>
-                {!m.estimated && <span className={badge.success}>obračun</span>}
-              </span>
-              <span className="font-mono text-sm tabular-nums text-muted-fg">
-                {fmtMoney(m.settled.paid || m.total)}
-              </span>
+            <div key={m.month} className="border-t border-border py-2.5 first:border-t-0">
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex min-w-0 items-center gap-2">
+                  <CheckCircleIcon className="size-3.5 shrink-0 text-success-fg" />
+                  <span className="truncate text-sm">{MONTH_NAMES[m.month - 1]}</span>
+                  {!m.estimated && <span className={badge.success}>obračun</span>}
+                </span>
+                <span className="font-mono text-sm tabular-nums text-muted-fg">
+                  {fmtMoney(m.settled.paid || m.total)}
+                </span>
+              </div>
+
+              {/*
+                Paying something other than the estimate means the estimate was
+                built on the wrong figures — almost always a revised insurance
+                base. FURS knows; the app only finds out here.
+              */}
+              {m.mismatch && (
+                <div className="mt-2 flex items-start gap-2 rounded-lg border border-border bg-warning-bg p-2.5 text-2xs leading-normal text-warning-fg">
+                  <AlertIcon className="mt-px size-3.5 shrink-0" />
+                  <div className="min-w-0">
+                    Plačali ste {fmtMoney(m.mismatch.paid)}, ocenili pa smo{' '}
+                    {fmtMoney(m.mismatch.expected)} —{' '}
+                    {m.mismatch.difference > 0 ? 'razlika ' : 'manj za '}
+                    <strong>{fmtMoney(Math.abs(m.mismatch.difference))}</strong>.
+                    {m.estimated
+                      ? ' Verjetno se je spremenila zavarovalna osnova. Vnesite obračun z eDavkov in ocene se popravijo.'
+                      : ' Znesek se ne ujema z vnesenim obračunom — preverite plačilo.'}
+                    {m.estimated && (
+                      <button
+                        className={`${btn.outline} ${btnXs} mt-1.5 block bg-card`}
+                        onClick={() => openSheet({ kind: 'contribution', year })}
+                      >
+                        Vnesi obračun
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </section>

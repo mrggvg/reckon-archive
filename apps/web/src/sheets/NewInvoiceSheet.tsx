@@ -16,6 +16,8 @@ import { useStore } from '../store/context';
 import { btn, btnBlock, field, hint, input, label, row2, tabSeg } from '../styles/cx';
 import { Select } from '../components/Select';
 import { DateField } from '../components/DateField';
+import { PassthroughFields } from '../components/PassthroughFields';
+import { yearPositionFrom } from '../lib/yearPosition';
 import { failureMessage } from '../lib/failure';
 import type { OpenSheet } from '../lib/sheets';
 
@@ -38,6 +40,11 @@ export function NewInvoiceSheet({
   const [periodStart, setPeriodStart] = useState(monthStartIso(todayIso()));
   const [periodEnd, setPeriodEnd] = useState(todayIso());
   const [amount, setAmount] = useState('');
+  // A favour raised through this s.p.: only the manual path, since an invoice
+  // built from logged hours is by definition this taxpayer's own work.
+  const [passthrough, setPassthrough] = useState<
+    { forWhom: string; keep: number } | null
+  >(null);
   const [clientId, setClientId] = useState(
     initialClientId ?? defaultClientId(data.clients),
   );
@@ -81,6 +88,7 @@ export function NewInvoiceSheet({
         periodStart,
         periodEnd,
         total,
+        passthrough: passthrough?.forWhom.trim() ? passthrough : null,
       });
       toast('Račun ' + invoice.number + ' ustvarjen');
       onClose();
@@ -234,6 +242,19 @@ export function NewInvoiceSheet({
               onChange={(e) => setAmount(e.target.value)}
             />
           </Field>
+
+          <PassthroughFields
+            totalEuros={parseFloat(amount) || 0}
+            value={passthrough}
+            onChange={setPassthrough}
+            year={Number(issueDate.slice(0, 4)) || Number(todayIso().slice(0, 4))}
+            kind="full"
+            position={yearPositionFrom(
+              data.invoices,
+              todayIso(),
+              data.profile.businessStartDate ?? null,
+            )}
+          />
         </>
       ) : candidates.length === 0 ? (
         <p className={`${hint} mb-4`}>

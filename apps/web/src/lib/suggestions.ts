@@ -104,15 +104,58 @@ export function alreadyLogged(
   );
 }
 
-/** The times a client was last worked, to open a form on instead of a guess. */
-export function lastShiftFor(
-  sessions: Session[],
-  clientId: string,
-): { start: string; end: string } | null {
-  const latest = sessions
-    .filter((s) => s.clientId === clientId)
+/**
+ * The client worked most recently — what a new entry should open on.
+ *
+ * Alphabetical order is arbitrary; what someone logged last time is not. Only
+ * clients still on the books are offered, so a deactivated one doesn't reappear
+ * through the back door, and an empty ledger falls back to the first active
+ * client as before.
+ */
+export function lastClientId(sessions: Session[], clients: Client[]): string {
+  const usable = new Set(clients.filter((c) => c.isActive).map((c) => c.id));
+  const latest = [...sessions]
+    .filter((s) => usable.has(s.clientId))
     .sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start))[0];
+  return latest?.clientId ?? '';
+}
+
+export interface Shift {
+  start: string;
+  end: string;
+}
+
+/** What a form falls back to when there is nothing at all to go on. */
+export const DEFAULT_SHIFT: Shift = { start: '09:00', end: '17:00' };
+
+/** The times a client was last worked, to open a form on instead of a guess. */
+export function lastShiftFor(sessions: Session[], clientId: string): Shift | null {
+  return newestShift(sessions.filter((s) => s.clientId === clientId));
+}
+
+/** The times last logged for anyone — the shape of this freelancer's day. */
+export function lastShift(sessions: Session[]): Shift | null {
+  return newestShift(sessions);
+}
+
+function newestShift(sessions: Session[]): Shift | null {
+  const latest = [...sessions].sort((a, b) =>
+    (b.date + b.start).localeCompare(a.date + a.start),
+  )[0];
   return latest ? { start: latest.start, end: latest.end } : null;
+}
+
+/**
+ * The times a new entry should open on.
+ *
+ * This client's own last shift first, since a client usually means a fixed
+ * slot. Failing that — a new client, or a first entry — the times last logged
+ * for anyone: someone who works mornings works mornings for the next client
+ * too. 09:00–17:00 is only the answer on an empty ledger, where it is a guess
+ * about a stranger rather than a claim about this person.
+ */
+export function usualShift(sessions: Session[], clientId: string): Shift {
+  return lastShiftFor(sessions, clientId) ?? lastShift(sessions) ?? DEFAULT_SHIFT;
 }
 
 export interface UnbilledClient {

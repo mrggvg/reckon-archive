@@ -57,6 +57,10 @@ export interface RevenueRow {
   paid_on: string | null;
   period_start: string;
   period_end: string;
+  /** Null when no hours were behind the invoice: a fixed fee, a one-off. */
+  total_minutes: number | null;
+  /** Set when the invoice was raised for somebody else; what was kept. */
+  passthrough_keep_cents: number | null;
 }
 
 export const taxRepo = {
@@ -220,27 +224,10 @@ export const taxRepo = {
   async revenue(userId: string): Promise<RevenueRow[]> {
     const { rows } = await pool.query<RevenueRow>(
       `SELECT id, number, client_id, client_name, total_cents, issue_date,
-              paid_on, period_start, period_end
+              paid_on, period_start, period_end, total_minutes,
+              passthrough_keep_cents
        FROM invoices WHERE user_id = $1
        ORDER BY issue_date`,
-      [userId],
-    );
-    return rows;
-  },
-
-  /** Hours worked, by date, for the effective-rate windows. */
-  async minutesByDate(
-    userId: string,
-  ): Promise<{ work_date: string; client_id: string | null; minutes: number }[]> {
-    const { rows } = await pool.query<{
-      work_date: string;
-      client_id: string | null;
-      minutes: number;
-    }>(
-      `SELECT work_date, client_id, sum(minutes)::int AS minutes
-       FROM work_sessions WHERE user_id = $1
-       GROUP BY work_date, client_id
-       ORDER BY work_date`,
       [userId],
     );
     return rows;

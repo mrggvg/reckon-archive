@@ -277,6 +277,25 @@ describe('invoicing', () => {
     assert.equal(edit.status, 409);
     assert.equal((await c.del(`/sessions/${ids[0]}`)).status, 409);
 
+    // And still frozen once the invoice is paid — which is the state the hours
+    // most need protecting in, since the document is now settled as well as
+    // sent. Taking the payment back does not thaw them either: they are on the
+    // invoice, and only deleting the invoice returns them.
+    await c.patch(`/invoices/${invoice.id}/payment`, {
+      paid: true, paidDate: '2026-05-20',
+    });
+    assert.equal(
+      (await c.put(`/sessions/${ids[0]}`, {
+        clientId: client.id, date: '2026-05-09', start: '09:00', end: '13:30',
+        note: 'moved',
+      })).status,
+      409,
+    );
+    assert.equal((await c.del(`/sessions/${ids[0]}`)).status, 409);
+
+    await c.patch(`/invoices/${invoice.id}/payment`, { paid: false, paidDate: null });
+    assert.equal((await c.del(`/sessions/${ids[0]}`)).status, 409);
+
     // The same hours cannot reach a second invoice.
     const again = await c.post('/invoices', {
       clientId: client.id,
@@ -316,7 +335,7 @@ describe('invoicing', () => {
     assert.equal(((await makeInvoice()).body as { number: string }).number, '004/2026');
   });
 
-  it('never hands a deleted invoice\'s number to the next one', async () => {
+  it('hands a deleted invoice\'s number back to the next one', async () => {
     const c = await signUp('reuse@example.com');
     await c.put('/profile', PROFILE);
     const client = (await c.post('/clients', CLIENT)).body as { id: string };
@@ -341,16 +360,26 @@ describe('invoicing', () => {
     const first = await issue('2026-03-01');
     assert.equal(first.number, '001/2026');
 
-    // 001 has been issued and possibly sent. Deleting it must not free it.
+    // The ledger is the whole authority, so a deleted number comes back round.
     assert.equal((await c.del(`/invoices/${first.id}`)).status, 204);
     const second = await issue('2026-03-02');
-    assert.equal(second.number, '002/2026', 'the number was not reused');
+    assert.equal(second.number, '001/2026', 'the number was not reused');
 
-    // The profile's declared number reflects the high-water mark.
+    // Only the newest one frees a number: deleting from the middle leaves the
+    // gap where it is rather than issuing a number out of order.
+    const third = await issue('2026-03-03');
+    const fourth = await issue('2026-03-04');
+    assert.equal(third.number, '002/2026');
+    assert.equal(fourth.number, '003/2026');
+    assert.equal((await c.del(`/invoices/${third.id}`)).status, 204);
+    assert.equal((await issue('2026-03-05')).number, '004/2026');
+
+    // Nothing was remembered behind the ledger's back: the profile still says
+    // what the user typed, not a high-water mark the app moved on its own.
     assert.equal(
       ((await c.get('/profile')).body as { nextInvoiceNumber: string })
         .nextInvoiceNumber,
-      '003/2026',
+      PROFILE.nextInvoiceNumber,
     );
   });
 
@@ -1306,6 +1335,87 @@ describe('tax module', () => {
     assert.equal(s.thisMonth!.contributionsSettled, false, 'not done until it is');
   });
 
+  it('notices when what was paid differs from what was estimated', async () => {
+    const c = await signUp('mismatch@example.com');
+    await c.put('/profile', PROFILE);
+    await c.put('/profile/tax', { ...taxProfile, businessStartDate: '2020-01-15' });
+    const year = new Date().getFullYear() - 1;
+
+    const monthly = ((await c.get(`/tax/summary?year=${year}`)).body as {
+      contributions: { monthlyAmount: number };
+    }).contributions.monthlyAmount;
+
+    // Paid what eDavki actually asked for, which is more than the estimate.
+    const reallyPaid = Math.round((monthly + 22.5) * 100) / 100;
+    await c.post('/tax/payments', {
+      paidOn: `${year}-12-20`, amount: reallyPaid, kind: 'contributions',
+      note: '', periodYear: year, periodMonth: 12, groupKey: null,
+    });
+
+    const december = ((await c.get(`/tax/contributions?year=${year}`)).body as {
+      month: number;
+      mismatch: { expected: number; paid: number; difference: number } | null;
+    }[]).find((m) => m.month === 12);
+
+    assert.equal(december?.mismatch?.paid, reallyPaid);
+    assert.equal(december?.mismatch?.expected, monthly);
+    assert.equal(december?.mismatch?.difference, 22.5, 'the estimate was short by this');
+
+    // A month paid exactly as estimated says nothing.
+    await c.post('/tax/payments', {
+      paidOn: `${year}-11-20`, amount: monthly, kind: 'contributions',
+      note: '', periodYear: year, periodMonth: 11, groupKey: null,
+    });
+    const november = ((await c.get(`/tax/contributions?year=${year}`)).body as {
+      month: number; mismatch: unknown;
+    }[]).find((m) => m.month === 11);
+    assert.equal(november?.mismatch, null);
+
+    // Nor does a month that is only partly paid — that is short, not wrong.
+    await c.post('/tax/payments', {
+      paidOn: `${year}-10-20`, amount: 100, kind: 'contributions',
+      note: '', periodYear: year, periodMonth: 10, groupKey: 'piz',
+    });
+    const october = ((await c.get(`/tax/contributions?year=${year}`)).body as {
+      month: number; mismatch: unknown;
+    }[]).find((m) => m.month === 10);
+    assert.equal(october?.mismatch, null);
+  });
+
+  it('takes the insurance base from a filing, since the filing is the authority', async () => {
+    const c = await signUp('learnbase@example.com');
+    await c.put('/profile', PROFILE);
+    await c.put('/profile/tax', { ...taxProfile, businessStartDate: '2026-06-03' });
+
+    // FURS revised the base; the filing says so before the app could know.
+    const filed = await c.post('/tax/contributions', {
+      year: 2026, month: 7, base: 1600.00,
+      piz: 194.80, zzDo: 286.56, stv: 3.20, zap: 3.20,
+    });
+    assert.equal(filed.status, 201);
+    assert.deepEqual((filed.body as { baseUpdated: unknown }).baseUpdated, {
+      from: 152162,
+      to: 160000,
+    });
+
+    // And every later estimate is built on the corrected figure.
+    const profile = (await c.get('/profile/tax')).body as { contributionBase: number };
+    assert.equal(profile.contributionBase, 1600);
+
+    const august = ((await c.get('/tax/contributions?year=2026')).body as {
+      month: number; base: number; estimated: boolean;
+    }[]).find((m) => m.month === 8);
+    assert.equal(august?.estimated, true);
+    assert.equal(august?.base, 1600, 'the estimate moved with it');
+
+    // Filing the same base again changes nothing and says so.
+    const again = await c.post('/tax/contributions', {
+      year: 2026, month: 8, base: 1600.00,
+      piz: 194.80, zzDo: 286.56, stv: 3.20, zap: 3.20,
+    });
+    assert.equal((again.body as { baseUpdated: unknown }).baseUpdated, null);
+  });
+
   it('warns that paying tax before invoices land means paying again', async () => {
     const c = await withRevenue('accrue@example.com');
     const s = (await c.get('/tax/summary?year=2026')).body as Record<
@@ -1588,6 +1698,190 @@ describe('paying before FURS says so', () => {
   });
 });
 
+describe('invoices raised for someone else', () => {
+  const taxSetup = {
+    businessStartDate: '2026-01-15', contributionBase: 1521.62,
+    contributionReliefOverride: null, normiranecKind: 'full' as const,
+    declaredMonthlyEstimate: null, officialInstallment: null,
+    officialInstallmentFrequency: null, dohodninaIban: 'SI56011008881000030',
+    dohodninaReference: '', weeklyHours: 40,
+  };
+  const carried = {
+    number: '020/2026', issueDate: '2026-07-01', dueDate: '2126-07-15',
+    description: 'Storitve', periodStart: '2026-06-01', periodEnd: '2026-06-30',
+  };
+
+  it('keeps the whole amount taxable while recording what was kept', async () => {
+    const c = await signUp('carry@example.com');
+    await c.put('/profile', PROFILE);
+    await c.put('/profile/tax', taxSetup);
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+
+    const res = await c.post('/invoices/manual', {
+      clientId: client.id, issueDate: '2026-07-01', dueDate: '2026-07-15',
+      description: 'Storitve', periodStart: '2026-06-01', periodEnd: '2026-06-30',
+      total: 1000,
+      passthrough: { forWhom: 'Miha', keep: 100 },
+    });
+    assert.equal(res.status, 201);
+    assert.deepEqual((res.body as Record<string, unknown>).passthrough, {
+      forWhom: 'Miha',
+      keep: 100,
+      handOver: 900,
+    });
+
+    await c.patch(`/invoices/${(res.body as { id: string }).id}/payment`, {
+      paid: true, paidDate: '2026-07-10',
+    });
+
+    // The point of the whole feature: the flag must never reduce tax.
+    const s = (await c.get('/tax/summary?year=2026')).body as Record<
+      string,
+      Record<string, unknown>
+    >;
+    assert.equal(s.dohodnina!.ytdRevenue, 1000, 'the full amount is revenue');
+    assert.equal(s.dohodnina!.owedToDate, 40, '4% of 1.000, not of 100');
+
+    // But only the kept share was earned here.
+    const r = (await c.get('/earnings/effective-rate')).body as {
+      windows: { key: string; gross: number; carried: number; dohodnina: number }[];
+    };
+    const ytd = r.windows.find((w) => w.key === 'ytd')!;
+    assert.equal(ytd.gross, 100, 'earnings count the cut, not the invoice');
+    assert.equal(ytd.carried, 900, 'and say what passed through');
+    assert.equal(ytd.dohodnina, 40, 'while the tax still follows the whole amount');
+  });
+
+  it('refuses a cut larger than the invoice', async () => {
+    const c = await signUp('toobig@example.com');
+    await c.put('/profile', PROFILE);
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+    const res = await c.post('/invoices/manual', {
+      clientId: client.id, issueDate: '2026-07-01', dueDate: '2026-07-15',
+      description: '', periodStart: '2026-06-01', periodEnd: '2026-06-30',
+      total: 500, passthrough: { forWhom: 'Miha', keep: 900 },
+    });
+    assert.equal(res.status, 422);
+  });
+
+  it('will not mark an invoice generated from hours as someone else\'s', async () => {
+    const c = await signUp('ownwork@example.com');
+    await c.put('/profile', PROFILE);
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+    const session = (
+      await c.post('/sessions', {
+        clientId: client.id, date: '2026-06-02', start: '09:00', end: '13:00', note: '',
+      })
+    ).body as { id: string };
+    const invoice = (
+      await c.post('/invoices', {
+        clientId: client.id, sessionIds: [session.id],
+        issueDate: '2026-06-30', dueDate: '2026-07-14', description: '',
+      })
+    ).body as { id: string; passthrough: unknown };
+
+    assert.equal(invoice.passthrough, null, 'hours were logged, so it is own work');
+    const edit = await c.patch(`/invoices/${invoice.id}`, {
+      passthrough: { forWhom: 'Miha', keep: 10 },
+    });
+    assert.equal(edit.status, 409, 'and the hours behind it say otherwise');
+  });
+
+  it('lets a cut be corrected on an invoice with no hours behind it', async () => {
+    const c = await signUp('fixcut@example.com');
+    await c.put('/profile', PROFILE);
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+    const invoice = (
+      await c.post('/invoices/import', {
+        ...carried, clientId: client.id, total: 1000, status: 'unpaid', paidDate: null,
+        passthrough: { forWhom: 'Miha', keep: 100 },
+      })
+    ).body as { id: string };
+
+    const fixed = await c.patch(`/invoices/${invoice.id}`, {
+      passthrough: { forWhom: 'Miha', keep: 150 },
+    });
+    assert.equal((fixed.body as { passthrough: { keep: number } }).passthrough.keep, 150);
+
+    // And it can be cleared when it was never a favour at all.
+    const cleared = await c.patch(`/invoices/${invoice.id}`, { passthrough: null });
+    assert.equal((cleared.body as { passthrough: unknown }).passthrough, null);
+  });
+});
+
+describe('where the year is heading', () => {
+  it('projects from the months actually traded, not from January', async () => {
+    const { forecastYear, yearSpan } = await import('@reckon/shared');
+
+    // Opened in June, so by the end of August three months have been traded —
+    // not eight — and four remain.
+    const span = yearSpan({ year: 2026, todayIso: '2026-08-31', startIso: '2026-06-03' });
+    assert.deepEqual(span, { monthsTraded: 3, monthsRemaining: 4 });
+
+    const f = forecastYear({
+      receivedCents: 900_000,
+      outstandingCents: 100_000,
+      ...span,
+    });
+    assert.equal(f.committedCents, 1_000_000, 'money in plus invoices out');
+    assert.equal(f.monthlyAverageCents, 300_000, '9.000 over three months');
+    assert.equal(f.projectedCents, 2_200_000, 'plus four more average months');
+
+    // Averaging from January instead would have said 1.125 a month and
+    // projected far too low — which is the mistake worth not making.
+    const wrong = forecastYear({
+      receivedCents: 900_000, outstandingCents: 100_000,
+      monthsTraded: 8, monthsRemaining: 4,
+    });
+    assert.ok(wrong.projectedCents < f.projectedCents);
+  });
+
+  it('forecasts nothing into a year that is over, or has not begun', async () => {
+    const { yearSpan, forecastYear } = await import('@reckon/shared');
+
+    const past = yearSpan({ year: 2025, todayIso: '2026-08-31', startIso: null });
+    assert.equal(past.monthsRemaining, 0);
+    const done = forecastYear({ receivedCents: 500_000, outstandingCents: 0, ...past });
+    assert.equal(done.projectedCents, 500_000, 'a finished year is what it was');
+
+    const ahead = yearSpan({ year: 2027, todayIso: '2026-08-31', startIso: null });
+    assert.deepEqual(ahead, { monthsTraded: 0, monthsRemaining: 0 });
+    // No months traded must not divide by zero.
+    const none = forecastYear({ receivedCents: 0, outstandingCents: 0, ...ahead });
+    assert.equal(none.monthlyAverageCents, 0);
+    assert.equal(none.projectedCents, 0);
+  });
+
+  it('reports the projection with its working', async () => {
+    const c = await signUp('projection@example.com');
+    await c.put('/profile', PROFILE);
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+    const invoice = async (number: string, total: number, paidOn: string | null) =>
+      c.post('/invoices/import', {
+        number, clientId: client.id, issueDate: '2026-07-01', dueDate: '2126-07-15',
+        description: 'Storitve', periodStart: '2026-06-01', periodEnd: '2026-06-30',
+        total, status: paidOn ? 'paid' : 'unpaid', paidDate: paidOn,
+      });
+    await invoice('001/2026', 4000, '2026-07-10');
+    await invoice('002/2026', 2500, '2026-08-05');
+    await invoice('003/2026', 1000, null);
+
+    const s = (await c.get('/tax/summary?year=2026')).body as Record<string, unknown>;
+    const p = s.projection as Record<string, number>;
+
+    // 4.000 + 2.500 received, 1.000 issued and unpaid.
+    assert.equal(p.received, 6500);
+    assert.equal(p.outstanding, 1000);
+    assert.equal(p.committed, 7500);
+    assert.ok(p.projected >= p.committed, 'the projection never undercuts the floor');
+    assert.equal(
+      Math.round((p.committed + p.monthlyAverage * p.monthsRemaining) * 100) / 100,
+      p.projected,
+      'and it is the sum of its parts, so it can be explained',
+    );
+  });
+});
+
 describe('effective hourly rate', () => {
   it('says what an hour is worth after everything is paid', async () => {
     const c = await signUp('rate@example.com');
@@ -1603,29 +1897,40 @@ describe('effective hourly rate', () => {
 
     const today = new Date().toISOString().slice(0, 10);
     const year = today.slice(0, 4);
-    // Ten days of eight hours, and an invoice paid for them.
+    // Ten days of eight hours, billed at 28 €/h and paid.
+    const sessionIds: string[] = [];
     for (let day = 1; day <= 10; day++) {
-      await c.post('/sessions', {
-        clientId: client.id,
-        date: `${year}-${today.slice(5, 7)}-${String(day).padStart(2, '0')}`,
-        start: '09:00', end: '17:00', note: '',
-      });
+      const logged = (
+        await c.post('/sessions', {
+          clientId: client.id,
+          date: `${year}-${today.slice(5, 7)}-${String(day).padStart(2, '0')}`,
+          start: '09:00', end: '17:00', note: '',
+        })
+      ).body as { id: string };
+      sessionIds.push(logged.id);
     }
-    await c.post('/invoices/import', {
-      number: '010/2026', clientId: client.id, issueDate: today, dueDate: today,
-      description: 'Storitve', periodStart: `${year}-01-01`, periodEnd: today,
-      total: 2400, status: 'paid', paidDate: today,
-    });
+    const billed = (
+      await c.post('/invoices', {
+        clientId: client.id, sessionIds, issueDate: today, dueDate: today,
+        description: '',
+      })
+    ).body as { id: string; total: number };
+    assert.equal(billed.total, 2240, '80 h at 28 €/h');
+    await c.patch(`/invoices/${billed.id}/payment`, { paid: true, paidDate: today });
 
     const res = await c.get('/earnings/effective-rate');
     assert.equal(res.status, 200);
     const r = res.body as Record<string, unknown>;
-    const ytd = (r.windows as { key: string; gross: number; hours: number; effectiveRate: number; net: number }[])
-      .find((w) => w.key === 'ytd')!;
+    type W = {
+      key: string; gross: number; flat: number; hours: number;
+      effectiveRate: number; net: number; contributions: number; dohodnina: number;
+    };
+    const ytd = (r.windows as W[]).find((w) => w.key === 'ytd')!;
 
-    assert.equal(ytd.gross, 2400);
+    assert.equal(ytd.gross, 2240);
     assert.equal(ytd.hours, 80);
-    assert.equal(ytd.dohodnina, 96, '4% of 2.400');
+    assert.equal(ytd.flat, 0, 'every euro of it came from an hour');
+    assert.equal(ytd.dohodnina, 89.6, '4% of 2.240');
 
     // Net is gross less both obligations, and the rate is net over the hours
     // behind it — arithmetic the caller can check rather than trust.
@@ -1635,15 +1940,127 @@ describe('effective hourly rate', () => {
     );
     assert.equal(Math.round((ytd.net / ytd.hours) * 100) / 100, ytd.effectiveRate);
 
-    // And it is well under the nominal 30 €/h — in fact negative here, because
+    // And it is well under the nominal 28 €/h — in fact negative here, because
     // contributions are owed by the calendar whether or not the work came in.
     // Reporting that honestly is the whole point of the number.
-    assert.ok(ytd.effectiveRate < 30, `effective ${ytd.effectiveRate} under nominal 30`);
+    assert.ok(ytd.effectiveRate < 28, `effective ${ytd.effectiveRate} under nominal 28`);
     assert.ok(ytd.contributions > ytd.gross, 'a thin year costs more than it earns');
 
-    const clients = r.clients as { name: string; hours: number; effectiveRate: number }[];
+    const clients = r.clients as
+      { name: string; gross: number; flat: number; hours: number; effectiveRate: number }[];
     assert.equal(clients[0]?.name, CLIENT.name);
     assert.equal(clients[0]?.hours, 80);
+  });
+
+  it('never divides money that had no hours behind it', async () => {
+    const c = await signUp('flatfee@example.com');
+    await c.put('/profile', PROFILE);
+    await c.put('/profile/tax', {
+      businessStartDate: '2026-01-01', contributionBase: 1521.62,
+      contributionReliefOverride: null, normiranecKind: 'full',
+      declaredMonthlyEstimate: null, officialInstallment: null,
+      officialInstallmentFrequency: null, dohodninaIban: 'SI56011008881000030',
+      dohodninaReference: '', weeklyHours: 40,
+    });
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+    const today = new Date().toISOString().slice(0, 10);
+    const year = today.slice(0, 4);
+
+    // Four hours logged and billed at 28 €/h: 112 €.
+    const session = (
+      await c.post('/sessions', {
+        clientId: client.id, date: today, start: '09:00', end: '13:00', note: '',
+      })
+    ).body as { id: string };
+    const billed = (
+      await c.post('/invoices', {
+        clientId: client.id, sessionIds: [session.id], issueDate: today,
+        dueDate: today, description: '',
+      })
+    ).body as { id: string; total: number };
+    await c.patch(`/invoices/${billed.id}/payment`, { paid: true, paidDate: today });
+
+    // The same client then pays a 2.000 € fixed fee, tied to no hours at all.
+    const fee = (
+      await c.post('/invoices/manual', {
+        clientId: client.id, issueDate: today, dueDate: today,
+        description: 'Pavšal', periodStart: `${year}-01-01`, periodEnd: today,
+        total: 2000,
+      })
+    ).body as { id: string };
+    await c.patch(`/invoices/${fee.id}/payment`, { paid: true, paidDate: today });
+
+    const r = (await c.get('/earnings/effective-rate')).body as {
+      windows: {
+        key: string; gross: number; flat: number; hours: number;
+        effectiveRate: number; contributions: number; dohodnina: number;
+      }[];
+      clients: { gross: number; flat: number; hours: number; effectiveRate: number }[];
+    };
+    const ytd = r.windows.find((w) => w.key === 'ytd')!;
+
+    assert.equal(ytd.gross, 2112, 'the fee is still money that came in');
+    assert.equal(ytd.flat, 2000, 'and is named as the part with no hours');
+    assert.equal(ytd.hours, 4, 'the fee brought no hours with it');
+
+    // The bug this guards: 2.112 € over 4 h reads as 528 €/h for work billed at
+    // 28 €/h. The rate must move only with what the hours were paid.
+    assert.ok(
+      ytd.effectiveRate < 28,
+      `effective ${ytd.effectiveRate} still under the nominal 28`,
+    );
+
+    // Only the hourly part is divided, and it carries the same share of the
+    // obligations as it is of the money — the fee pays its own way.
+    const hourly = ytd.gross - ytd.flat;
+    const burden = ytd.contributions + ytd.dohodnina;
+    const expected =
+      Math.round(((hourly - Math.round(burden * 100 * (hourly / ytd.gross)) / 100) /
+        ytd.hours) * 100) / 100;
+    assert.equal(ytd.effectiveRate, expected, 'the rate is the hourly part over its hours');
+
+    const row = r.clients[0]!;
+    assert.equal(row.gross, 2112, 'the client is credited with everything paid');
+    assert.equal(row.flat, 2000, 'of which this much bought no hours');
+    assert.equal(row.hours, 4);
+    assert.ok(row.effectiveRate < 28, `client rate ${row.effectiveRate} under nominal`);
+  });
+
+  it('keeps work still under way in the work view', async () => {
+    const c = await signUp('openperiod@example.com');
+    await c.put('/profile', PROFILE);
+    const client = (await c.post('/clients', CLIENT)).body as { id: string };
+    const today = new Date().toISOString().slice(0, 10);
+    const [y, m, d] = today.split('-').map(Number) as [number, number, number];
+    // Shifts are rostered ahead, so the last one billed can be days away: the
+    // invoice's period ends after today even though it is issued and paid now.
+    const ahead = new Date(Date.UTC(y, m - 1, d + 5)).toISOString().slice(0, 10);
+
+    const sessionIds: string[] = [];
+    for (const date of [today, ahead]) {
+      const logged = (
+        await c.post('/sessions', {
+          clientId: client.id, date, start: '09:00', end: '17:00', note: '',
+        })
+      ).body as { id: string };
+      sessionIds.push(logged.id);
+    }
+    const billed = (
+      await c.post('/invoices', {
+        clientId: client.id, sessionIds, issueDate: today, dueDate: today,
+        description: '',
+      })
+    ).body as { id: string; periodEnd: string };
+    assert.ok(billed.periodEnd > today, 'the period really does run past today');
+    await c.patch(`/invoices/${billed.id}/payment`, { paid: true, paidDate: today });
+
+    for (const basis of ['payment', 'service']) {
+      const ytd = ((await c.get(`/earnings/effective-rate?basis=${basis}`)).body as {
+        windows: { key: string; gross: number; hours: number }[];
+      }).windows.find((w) => w.key === 'ytd')!;
+      assert.equal(ytd.gross, 448, `${basis}: 16 h at 28 €/h`);
+      assert.equal(ytd.hours, 16, `${basis}: the hours came with it`);
+    }
   });
 
   it('offers both a cash view and a work view', async () => {

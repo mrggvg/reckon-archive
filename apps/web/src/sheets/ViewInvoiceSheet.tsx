@@ -1,7 +1,8 @@
 import { Receipt } from '../components/Receipt';
 import { EditIcon, ListIcon, PrinterIcon, TrashIcon } from '../components/icons';
 import { Sheet } from '../components/ui';
-import { todayIso } from '../lib/format';
+import { fmtDMY, todayIso } from '../lib/format';
+import { numberAfterDelete, unpaidWarning } from '../lib/invoice';
 import type { OpenSheet } from '../lib/sheets';
 import { failureMessage } from '../lib/failure';
 import { useStore } from '../store/context';
@@ -33,13 +34,46 @@ export function ViewInvoiceSheet({
 
   const togglePaid = () => {
     const nowPaid = inv.status !== 'paid';
+    // Marking paid is safe and reversible; reversing it is the one that moves
+    // money out of a month whose taxes may already be settled.
+    if (!nowPaid && !confirm(unpaidWarning(inv, client?.name ?? inv.clientName ?? 'stranko'))) return;
     void setInvoicePaid(id, nowPaid, nowPaid ? todayIso() : null)
       .then(() => toast(nowPaid ? 'Označeno kot plačano' : 'Označeno kot neplačano'))
       .catch((err: unknown) => toast(failureMessage(err)));
   };
 
+  /*
+   * Deleting is the one place the numbering can go backwards.
+   *
+   * The series is derived from the ledger, so removing the newest invoice hands
+   * its number to the next one. That is usually what someone wants — a wrong
+   * invoice deleted minutes after it was made should not burn a number — but if
+   * the invoice has already been sent, the same number ends up on two different
+   * documents. Only the user knows which case this is, so they are told which
+   * number is at stake before they answer.
+   */
   const remove = () => {
-    if (!confirm('Izbrišem ta račun? Njegove ure bodo spet neobračunane.')) return;
+    const freed = numberAfterDelete(data.invoices, inv, data.profile.nextInvoiceNumber);
+    const consequence =
+      freed === inv.number
+        ? `Številko ${inv.number} bo dobil naslednji račun. Če ste ta račun že ` +
+          'poslali stranki, bosta v obtoku dva dokumenta z isto številko.'
+        : `Številka ${inv.number} ostane preskočena — naslednji račun dobi ${freed}.`;
+    // A paid invoice is also a record of money that arrived, and the tax figures
+    // are counted from it. Deleting one removes both, so it is named first.
+    const settled =
+      inv.status === 'paid'
+        ? `Račun je označen kot plačan${
+            inv.paidDate ? ` ${fmtDMY(inv.paidDate)}` : ''
+          }; z brisanjem izgine tudi ta prejem iz izračuna davkov. `
+        : '';
+    if (
+      !confirm(
+        `Izbrišem račun ${inv.number}?\n\n${settled}Njegove ure bodo spet ` +
+          `neobračunane. ${consequence}`,
+      )
+    )
+      return;
     // Deleting the invoice is what frees its hours; the store re-reads the
     // ledger afterwards rather than assuming which ones came back.
     void removeInvoice(id)

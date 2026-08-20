@@ -20,6 +20,8 @@ export interface ProfileRow {
   next_invoice_number: string;
   place_of_issue: string;
   vat_clause: string;
+  /** Read-only here; written through the tax profile. */
+  business_start_date: string | null;
 }
 
 export function toProfileDto(row: ProfileRow) {
@@ -37,6 +39,9 @@ export function toProfileDto(row: ProfileRow) {
     nextInvoiceNumber: row.next_invoice_number,
     placeOfIssue: row.place_of_issue,
     vatClause: row.vat_clause,
+    // Carried so a form can work out how much of the year has been traded
+    // without a second request. Not writable through this endpoint.
+    businessStartDate: row.business_start_date,
   };
 }
 
@@ -110,6 +115,8 @@ export interface InvoiceRow {
   client_name: string;
   client_address: string;
   client_tax_number: string;
+  passthrough_for: string;
+  passthrough_keep_cents: number | null;
 }
 
 export function toInvoiceDto(row: InvoiceRow, sessionIds: string[] = []) {
@@ -133,6 +140,18 @@ export function toInvoiceDto(row: InvoiceRow, sessionIds: string[] = []) {
     clientName: row.client_name,
     clientAddress: row.client_address,
     clientTaxNumber: row.client_tax_number,
+    /*
+     * Raised for somebody else: the whole amount is still revenue here, but
+     * only the kept share was earned here. Null for an ordinary invoice.
+     */
+    passthrough:
+      row.passthrough_keep_cents === null
+        ? null
+        : {
+            forWhom: row.passthrough_for,
+            keep: fromCents(row.passthrough_keep_cents),
+            handOver: fromCents(row.total_cents - row.passthrough_keep_cents),
+          },
   };
 }
 
